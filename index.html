@@ -3,19 +3,19 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>不思議のダンジョン風ミニゲーム（画像：fighter/slyme/kaidan/potion）</title>
+<title>不思議のダンジョン風ミニゲーム</title>
 <style>
   body { background:#111; color:#eee; font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
   canvas { image-rendering: pixelated; border:4px solid #222; background:#000; }
-  #hud { margin-top:10px; width:640px; display:flex; justify-content:space-between; }
-  .info { background:#1a1a1a; padding:8px 12px; border-radius:6px; }
+  #hud { margin-top:10px; width:640px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
+  .info { background:#1a1a1a; padding:8px 12px; border-radius:6px; min-width:200px; text-align:left; }
 </style>
 </head>
 <body>
 <h3>不思議のダンジョン風ミニゲーム</h3>
 <canvas id="game" width="640" height="640"></canvas>
 <div id="hud">
-  <div class="info" id="status">HP: 10/10 | Floor: 1</div>
+  <div class="info" id="status">HP: 10/10 | Floor: 1 | Lv: 1</div>
   <div class="info" id="message">矢印キーで移動。敵は一度隣接すると追跡。</div>
 </div>
 
@@ -33,27 +33,46 @@ ctx.imageSmoothingEnabled = false;
 
 const TILE = { WALL:0, FLOOR:1, STAIRS:2, POTION:3 };
 
-/* --- 画像アセット（各ファイルを同フォルダに配置） --- */
-const fighterImg = new Image(); fighterImg.src = 'fighter.png'; // 1024x1024 単一画像
-const enemyImg   = new Image(); enemyImg.src   = 'slyme1.png';  // 1024x1024 単一画像
-const stairsImg  = new Image(); stairsImg.src  = 'kaidan.png';  // 1024x1024 単一画像
-const potionImg  = new Image(); potionImg.src  = 'potion.png';  // 768x768 単一画像
+/* --- 画像アセット --- */
+const assetFiles = {
+  fighter: 'fighter.png',
+  stairs: 'kaidan.png',
+  potion: 'potion.png',
+  enemies: ['slyme1.png','goblin.png','owk.png','skelton.png','golem.png','demon.png']
+};
+const fighterImg = new Image(); fighterImg.src = assetFiles.fighter;
+const stairsImg  = new Image(); stairsImg.src  = assetFiles.stairs;
+const potionImg  = new Image(); potionImg.src  = assetFiles.potion;
+const enemyImgs  = assetFiles.enemies.map(src => { const i = new Image(); i.src = src; return i; });
 
 let assetsLoaded = 0;
-[fighterImg, enemyImg, stairsImg, potionImg].forEach(img=>{
+const allImgs = [fighterImg, stairsImg, potionImg, ...enemyImgs];
+allImgs.forEach(img=>{
   img.onload = () => { assetsLoaded++; startIfReady(); };
   img.onerror = () => { console.warn(img.src + ' の読み込みに失敗しました。'); startIfReady(); };
 });
 
 /* --- ゲーム状態 --- */
+// 初期の基礎攻撃力を 1 に設定
 let floor = 1;
 let map = [];
 let seen = [];
 let revealProgress = [];
-let player = { x:0, y:0, hp:10, maxHp:10 };
+let player = {
+  x:0, y:0,
+  hp:10,
+  maxHp:10,
+  baseAtk:1,      // 初期基礎攻撃力を 1 に変更
+  randomAtk:1     // 追加ランダム振れ幅（0..randomAtk）
+};
 let enemies = []; // {x,y,hp,chasing}
+let killCount = 0;
 let messages = [];
 let gameOver = false;
+
+/* --- 成長閾値（ランダム 10〜12） --- */
+function nextThresholdValue() { return 10 + Math.floor(Math.random() * 3); } // 10,11,12
+let nextGrowthThreshold = nextThresholdValue(); // 最初の閾値
 
 /* --- マップ生成 --- */
 function generateMap() {
@@ -140,6 +159,12 @@ function animateReveal() {
   requestAnimationFrame(stepAnim);
 }
 
+/* --- 敵画像選択（フロアごと） --- */
+function enemyImageForFloor(floorNumber) {
+  const idx = Math.min(5, Math.floor((floorNumber - 1) / 10));
+  return enemyImgs[idx];
+}
+
 /* --- 描画 --- */
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
@@ -180,14 +205,15 @@ function draw() {
     }
   }
 
-  // 敵描画
+  // 敵描画：現在のフロアに応じた画像を使用
+  const currentEnemyImg = enemyImageForFloor(floor);
   for (const e of enemies) {
     const isSeen = seen[e.y][e.x];
     if (!isSeen) continue;
     const isVisible = inVisRange(player.x, player.y, e.x, e.y);
     if (isVisible) {
-      if (enemyImg.complete && enemyImg.naturalWidth !== 0) {
-        ctx.drawImage(enemyImg, 0, 0, enemyImg.width, enemyImg.height, e.x*TILE_SIZE, e.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      if (currentEnemyImg.complete && currentEnemyImg.naturalWidth !== 0) {
+        ctx.drawImage(currentEnemyImg, 0, 0, currentEnemyImg.width, currentEnemyImg.height, e.x*TILE_SIZE, e.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
       } else drawCircle(e.x,e.y,'#ff6666');
     } else {
       drawCircle(e.x,e.y,'#5a2a2a');
@@ -199,7 +225,8 @@ function draw() {
     ctx.drawImage(fighterImg, 0, 0, fighterImg.width, fighterImg.height, player.x*TILE_SIZE, player.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
   } else drawCircle(player.x, player.y, '#66ccff');
 
-  document.getElementById('status').textContent = `HP: ${player.hp}/${player.maxHp} | Floor: ${floor} | Enemies: ${enemies.length}`;
+  // HUD 更新（Lv 表示）
+  document.getElementById('status').textContent = `HP: ${player.hp}/${player.maxHp} | Floor: ${floor} | Lv: ${player.baseAtk}`;
   const msg = messages.length ? messages[messages.length-1] : '矢印キーで移動。';
   document.getElementById('message').textContent = msg;
 }
@@ -268,6 +295,23 @@ function findNextStepBFS(sx,sy,tx,ty) {
   return null;
 }
 
+/* --- 成長ロジック（ランダムで10〜12体ごとに成長） --- */
+function onEnemyKilled() {
+  killCount++;
+  // 閾値に達したら成長（どちらを上げるかはランダム）
+  if (killCount >= nextGrowthThreshold) {
+    if (Math.random() < 0.5) {
+      player.baseAtk += 1;
+    } else {
+      player.randomAtk += 1;
+    }
+    // 次の閾値を現在のキル数からさらにランダムで10〜12体先に設定
+    nextGrowthThreshold = killCount + nextThresholdValue();
+  }
+  // 表示は簡素化：成長の詳細は HUD に出さない
+  messages.push('敵を倒した。');
+}
+
 /* --- ゲームロジック --- */
 function inBounds(x,y){ return x>=0 && x<MAP_W && y>=0 && y<MAP_H; }
 
@@ -310,13 +354,15 @@ function tryMovePlayer(dx,dy) {
   draw();
 }
 
+/* --- プレイヤー攻撃 --- */
 function attackEnemy(enemy) {
-  const dmg = 2 + Math.floor(Math.random()*2);
+  const rand = Math.floor(Math.random() * (player.randomAtk + 1));
+  const dmg = player.baseAtk + rand;
   enemy.hp -= dmg;
   messages.push(`敵に ${dmg} ダメージ！`);
   if (enemy.hp <= 0) {
-    messages.push('敵を倒した！');
     enemies = enemies.filter(e=>e!==enemy);
+    onEnemyKilled();
   } else {
     if (Math.random() < 0.6) {
       const edmg = 1 + Math.floor(Math.random()*2);
@@ -401,8 +447,7 @@ window.addEventListener('keydown', (e)=>{
 
 /* --- 初期化 --- */
 function startIfReady(){
-  // 4つの画像を待つ
-  if (assetsLoaded >= 4) {
+  if (assetsLoaded >= allImgs.length) {
     generateMap();
     draw();
   }
