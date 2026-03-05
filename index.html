@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>不思議のダンジョン風ミニゲーム</title>
+<title>不思議のダンジョン風ミニゲーム（画像階段・敵）</title>
 <style>
   body { background:#111; color:#eee; font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
   canvas { image-rendering: pixelated; border:4px solid #222; background:#000; }
@@ -14,7 +14,7 @@
 </style>
 </head>
 <body>
-<h3>不思議のダンジョン風ミニゲーム</h3>
+<h3>不思議のダンジョン風ミニゲーム（kaidan.png / slyme1.png 使用）</h3>
 <canvas id="game" width="640" height="640"></canvas>
 <div id="hud">
   <div class="info" id="status">HP: 10 | Floor: 1</div>
@@ -23,8 +23,8 @@
 <div class="legend">
   <span>🟫 壁</span>
   <span>⬛ 床</span>
-  <span style="color:#ff6666">🟥 敵</span>
-  <span style="color:#ffff66">🟨 階段</span>
+  <span style="color:#ff6666">🟥 敵（slyme1.png）</span>
+  <span style="color:#ffff66">🟨 階段（kaidan.png）</span>
   <span style="color:#66ff66">🟩 回復薬</span>
   <span style="color:#66ccff">🟦 プレイヤー</span>
 </div>
@@ -38,6 +38,7 @@ const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = MAP_W * TILE_SIZE;
 canvas.height = MAP_H * TILE_SIZE;
+ctx.imageSmoothingEnabled = false;
 
 const TILE = { WALL:0, FLOOR:1, STAIRS:2, POTION:3 };
 const COLORS = {
@@ -49,6 +50,17 @@ const COLORS = {
   potion:'#66ff66'
 };
 
+/* --- 画像読み込み（1024x1024 の単一画像を縮小して使用） --- */
+const stairsImg = new Image();
+stairsImg.src = 'kaidan.png';
+const enemyImg = new Image();
+enemyImg.src = 'slyme1.png';
+let assetsLoaded = 0;
+stairsImg.onload = () => { assetsLoaded++; startIfReady(); };
+enemyImg.onload = () => { assetsLoaded++; startIfReady(); };
+stairsImg.onerror = () => { console.warn('kaidan.png の読み込みに失敗しました。'); startIfReady(); };
+enemyImg.onerror = () => { console.warn('slyme1.png の読み込みに失敗しました。'); startIfReady(); };
+
 /* --- ゲーム状態 --- */
 let floor = 1;
 let map = [];
@@ -57,9 +69,8 @@ let enemies = [];
 let messages = [];
 let gameOver = false;
 
-/* --- マップ生成: drunkard walk（ランダムウォーク）--- */
+/* --- マップ生成: drunkard walk --- */
 function generateMap() {
-  // 初期化：全て壁
   map = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(TILE.WALL));
   const walkCount = 600;
   let x = Math.floor(MAP_W/2), y = Math.floor(MAP_H/2);
@@ -72,9 +83,7 @@ function generateMap() {
     if (dir===3 && y<MAP_H-2) y++;
     map[y][x] = TILE.FLOOR;
   }
-  // プレイヤー配置（中心に最も近い床）
   player.x = x; player.y = y;
-  // 階段とポーション、敵を配置
   placeTileRandom(TILE.STAIRS, 1);
   placeTileRandom(TILE.POTION, 3 + Math.floor(floor/2));
   enemies = [];
@@ -107,23 +116,30 @@ function spawnEnemy() {
 
 /* --- 描画 --- */
 function draw() {
-  // 背景
   for (let y=0;y<MAP_H;y++){
     for (let x=0;x<MAP_W;x++){
       const t = map[y][x];
       if (t === TILE.WALL) fillRect(x,y,COLORS[TILE.WALL]);
       else if (t === TILE.FLOOR) fillRect(x,y,COLORS[TILE.FLOOR]);
-      else if (t === TILE.STAIRS) fillRect(x,y,COLORS[TILE.FLOOR]), drawRect(x,y,COLORS.stairs);
       else if (t === TILE.POTION) fillRect(x,y,COLORS[TILE.FLOOR]), drawRect(x,y,COLORS.potion);
+      else if (t === TILE.STAIRS) {
+        if (stairsImg.complete && stairsImg.naturalWidth !== 0) {
+          ctx.drawImage(stairsImg, 0, 0, stairsImg.width, stairsImg.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        } else {
+          fillRect(x,y,COLORS[TILE.FLOOR]);
+          drawRect(x,y,COLORS.stairs);
+        }
+      }
     }
   }
-  // 敵
   for (const e of enemies) {
-    drawCircle(e.x,e.y,COLORS.enemy);
+    if (enemyImg.complete && enemyImg.naturalWidth !== 0) {
+      ctx.drawImage(enemyImg, 0, 0, enemyImg.width, enemyImg.height, e.x*TILE_SIZE, e.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    } else {
+      drawCircle(e.x,e.y,COLORS.enemy);
+    }
   }
-  // プレイヤー
   drawCircle(player.x, player.y, COLORS.player);
-  // HUD
   document.getElementById('status').textContent = `HP: ${player.hp}/${player.maxHp} | Floor: ${floor} | Enemies: ${enemies.length}`;
   const msg = messages.length ? messages[messages.length-1] : '矢印キーで移動。階段を目指せ。';
   document.getElementById('message').textContent = msg;
@@ -152,15 +168,11 @@ function tryMovePlayer(dx,dy) {
   const nx = player.x + dx, ny = player.y + dy;
   if (!inBounds(nx,ny)) return;
   if (map[ny][nx] === TILE.WALL) { messages.push('壁だ。'); return; }
-  // 敵がいるか？
   const enemy = enemies.find(e=>e.x===nx && e.y===ny);
   if (enemy) {
-    // 攻撃
     attackEnemy(enemy);
   } else {
-    // 移動
     player.x = nx; player.y = ny;
-    // アイテムや階段の処理
     const tile = map[ny][nx];
     if (tile === TILE.POTION) {
       player.hp = Math.min(player.maxHp, player.hp + 5);
@@ -169,14 +181,12 @@ function tryMovePlayer(dx,dy) {
     } else if (tile === TILE.STAIRS) {
       floor++;
       messages.push(`階段を下りた。フロア ${floor} へ。`);
-      // 少し回復して次フロアへ
       player.hp = Math.min(player.maxHp, player.hp + 2);
       generateMap();
     } else {
       messages.push('移動した。');
     }
   }
-  // 敵のターン
   enemiesTurn();
   checkPlayerDead();
   draw();
@@ -187,11 +197,9 @@ function attackEnemy(enemy) {
   enemy.hp -= dmg;
   messages.push(`敵に ${dmg} ダメージ！`);
   if (enemy.hp <= 0) {
-    // 敵死亡
     messages.push('敵を倒した！');
     enemies = enemies.filter(e=>e!==enemy);
   } else {
-    // 反撃
     const r = Math.random();
     if (r < 0.6) {
       const edmg = 1 + Math.floor(Math.random()*2);
@@ -203,15 +211,12 @@ function attackEnemy(enemy) {
 
 function enemiesTurn() {
   for (const e of enemies) {
-    // シンプルなAI: プレイヤーが隣接していれば攻撃、そうでなければランダム移動
     const dx = player.x - e.x, dy = player.y - e.y;
     if (Math.abs(dx) + Math.abs(dy) === 1) {
-      // 攻撃
       const dmg = 1 + Math.floor(Math.random()*2);
       player.hp -= dmg;
       messages.push(`敵に ${dmg} ダメージを受けた。`);
     } else {
-      // ランダム移動（床のみ）
       const dirs = [[1,0],[-1,0],[0,1],[0,-1],[0,0]];
       const [mx,my] = dirs[Math.floor(Math.random()*dirs.length)];
       const nx = e.x + mx, ny = e.y + my;
@@ -241,9 +246,16 @@ window.addEventListener('keydown', (e)=>{
   else if (key === ' ') { enemiesTurn(); messages.push('待機した。'); checkPlayerDead(); draw(); e.preventDefault(); }
 });
 
-/* --- 初期化 --- */
-generateMap();
-draw();
+/* --- 初期化制御（画像読み込み待ち） --- */
+function startIfReady(){
+  // ここでは階段と敵画像の両方を待つ
+  if (assetsLoaded >= 2) {
+    generateMap();
+    draw();
+  }
+}
+// 画像が読み込まれない場合に強制開始したいときは下のコメントを外してください。
+// generateMap(); draw();
 </script>
 </body>
 </html>
