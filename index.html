@@ -9,36 +9,18 @@
   canvas { image-rendering: pixelated; border:4px solid #222; background:#000; }
   #hud { margin-top:10px; width:640px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
   .info { background:#1a1a1a; padding:8px 12px; border-radius:6px; min-width:200px; text-align:left; }
-  /* ゲームオーバー用オーバーレイ */
   #gameOverOverlay {
-    position: fixed;
-    left: 0; top: 0;
-    width: 100vw; height: 100vh;
-    display: none;
-    align-items: center;
-    justify-content: center;
-    background: rgba(0,0,0,0.6);
-    z-index: 50;
+    position: fixed; left:0; top:0; width:100vw; height:100vh;
+    display:none; align-items:center; justify-content:center;
+    background: rgba(0,0,0,0.6); z-index:50;
   }
   #gameOverBox {
-    background: #1b1b1b;
-    border: 2px solid #444;
-    padding: 24px;
-    border-radius: 10px;
-    text-align: center;
-    min-width: 320px;
+    background:#1b1b1b; border:2px solid #444; padding:24px; border-radius:10px; text-align:center; min-width:320px;
   }
-  #gameOverBox h2 { margin: 0 0 12px 0; font-size:20px; color:#ffdddd; }
+  #gameOverBox h2 { margin:0 0 12px 0; font-size:20px; color:#ffdddd; }
   #evalText { color:#ffd; margin-bottom:12px; font-weight:700; }
   #retryBtn {
-    background:#66cc66;
-    color:#062006;
-    border:none;
-    padding:10px 18px;
-    border-radius:8px;
-    font-weight:700;
-    cursor:pointer;
-    margin-top:8px;
+    background:#66cc66; color:#062006; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:8px;
   }
   #retryBtn:hover { filter:brightness(0.95); }
   @media (max-width:700px){
@@ -49,15 +31,15 @@
 </head>
 <body>
 <h3>勇者、潜ります</h3>
+
 <div style="position:relative;">
   <canvas id="game" width="640" height="640"></canvas>
 
-  <!-- ゲームオーバー用オーバーレイ -->
   <div id="gameOverOverlay" role="dialog" aria-modal="true">
     <div id="gameOverBox">
       <h2>ゲームオーバー</h2>
       <div id="evalText">あなたの評価: —</div>
-      <div style="color:#ddd; margin-bottom:12px;" id="floorText">到達フロア: 0</div>
+      <div id="floorText" style="color:#ddd; margin-bottom:12px;">到達フロア: 0</div>
       <button id="retryBtn">再挑戦</button>
     </div>
   </div>
@@ -87,8 +69,20 @@ const assetFiles = {
   fighter: 'fighter.png',
   stairs: 'kaidan.png',
   potion: 'potion.png',
-  enemies: ['slyme1.png','goblin.png','owk.png','skelton.png','golem.png','demon.png']
+  enemies: [
+    'slyme1.png',  // 1–10F
+    'goblin.png',  // 11–20F
+    'owk.png',     // 21–30F
+    'wolf.png',    // 31–40F
+    'spider.png',  // 41–50F
+    'skelton.png', // 51–60F
+    'mino.png',    // 61–70F
+    'golem.png',   // 71–80F
+    'demon.png',   // 81–90F
+    'enem.png'     // 91F〜固定
+  ]
 };
+
 const fighterImg = new Image(); fighterImg.src = assetFiles.fighter;
 const stairsImg  = new Image(); stairsImg.src  = assetFiles.stairs;
 const potionImg  = new Image(); potionImg.src  = assetFiles.potion;
@@ -98,7 +92,7 @@ let assetsLoaded = 0;
 const allImgs = [fighterImg, stairsImg, potionImg, ...enemyImgs];
 allImgs.forEach(img=>{
   img.onload = () => { assetsLoaded++; startIfReady(); };
-  img.onerror = () => { console.warn(img.src + ' の読み込みに失敗しました。'); startIfReady(); };
+  img.onerror = () => { console.warn(img.src + ' の読み込みに失敗しました。'); assetsLoaded++; startIfReady(); };
 });
 
 /* --- ゲーム状態 --- */
@@ -134,9 +128,11 @@ function generateMap() {
   map = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(TILE.WALL));
   seen = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(false));
   revealProgress = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(0));
+
   const walkCount = 600;
   let x = Math.floor(MAP_W/2), y = Math.floor(MAP_H/2);
   map[y][x] = TILE.FLOOR;
+
   for (let i=0;i<walkCount;i++){
     const dir = Math.floor(Math.random()*4);
     if (dir===0 && x>1) x--;
@@ -145,12 +141,16 @@ function generateMap() {
     if (dir===3 && y<MAP_H-2) y++;
     map[y][x] = TILE.FLOOR;
   }
+
   player.x = x; player.y = y;
+
   placeTileRandom(TILE.STAIRS, 1);
   placeTileRandom(TILE.POTION, 3 + Math.floor(floor/2));
+
   enemies = [];
   const enemyCount = 3 + Math.floor(floor/2);
   for (let i=0;i<enemyCount;i++) spawnEnemy();
+
   revealAround(player.x, player.y);
 }
 
@@ -214,15 +214,17 @@ function animateReveal() {
   requestAnimationFrame(stepAnim);
 }
 
-/* --- 敵画像選択（フロアごと） --- */
+/* --- 敵画像選択（10Fごと、91F以降は enem.png 固定） --- */
 function enemyImageForFloor(floorNumber) {
-  const idx = Math.min(5, Math.floor((floorNumber - 1) / 10));
+  let idx = Math.floor((floorNumber - 1) / 10);
+  if (idx >= enemyImgs.length - 1) idx = enemyImgs.length - 1;
   return enemyImgs[idx];
 }
 
 /* --- 描画 --- */
 function draw() {
   ctx.clearRect(0,0,canvas.width,canvas.height);
+
   for (let y=0;y<MAP_H;y++){
     for (let x=0;x<MAP_W;x++){
       const t = map[y][x];
@@ -260,7 +262,6 @@ function draw() {
     }
   }
 
-  // 敵描画：現在のフロアに応じた画像を使用
   const currentEnemyImg = enemyImageForFloor(floor);
   for (const e of enemies) {
     const isSeen = seen[e.y][e.x];
@@ -275,12 +276,10 @@ function draw() {
     }
   }
 
-  // 主人公
   if (fighterImg.complete && fighterImg.naturalWidth !== 0) {
     ctx.drawImage(fighterImg, 0, 0, fighterImg.width, fighterImg.height, player.x*TILE_SIZE, player.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
   } else drawCircle(player.x, player.y, '#66ccff');
 
-  // HUD 更新（Lv 表示は baseAtk）
   document.getElementById('status').textContent = `HP: ${player.hp}/${player.maxHp} | Floor: ${floor} | Lv: ${player.baseAtk}`;
   const msg = messages.length ? messages[messages.length-1] : '矢印キーで移動。';
   document.getElementById('message').textContent = msg;
@@ -359,48 +358,6 @@ function onEnemyKilled() {
     nextGrowthThreshold = killCount + nextThresholdValue();
   }
   messages.push('敵を倒した。');
-}
-
-/* --- ゲームオーバー UI --- */
-const overlay = document.getElementById('gameOverOverlay');
-const retryBtn = document.getElementById('retryBtn');
-const evalText = document.getElementById('evalText');
-const floorText = document.getElementById('floorText');
-
-function evaluatePlayer(reachedFloor) {
-  if (reachedFloor >= 100) return '伝説の勇者';
-  if (reachedFloor >= 80) return '伝説に近い勇者';
-  if (reachedFloor >= 50) return '英雄';
-  if (reachedFloor >= 30) return '勇者';
-  if (reachedFloor >= 10) return '見習い勇者';
-  return '初心者';
-}
-
-function showGameOverUI() {
-  const reached = floor;
-  evalText.textContent = `あなたの評価: ${evaluatePlayer(reached)}`;
-  floorText.textContent = `到達フロア: ${reached}`;
-  overlay.style.display = 'flex';
-  retryBtn.focus();
-}
-function hideGameOverUI() {
-  overlay.style.display = 'none';
-}
-
-/* --- リセット（再挑戦） --- */
-function resetGame() {
-  floor = 1;
-  player.hp = 10;
-  player.maxHp = 10;
-  player.baseAtk = 1;
-  player.randomAtk = 1;
-  killCount = 0;
-  messages = [];
-  nextGrowthThreshold = nextThresholdValue();
-  gameOver = false;
-  hideGameOverUI();
-  generateMap();
-  draw();
 }
 
 /* --- ゲームロジック --- */
@@ -520,6 +477,48 @@ function checkPlayerDead() {
     draw();
     showGameOverUI();
   }
+}
+
+/* --- ゲームオーバー UI --- */
+const overlay = document.getElementById('gameOverOverlay');
+const retryBtn = document.getElementById('retryBtn');
+const evalText = document.getElementById('evalText');
+const floorText = document.getElementById('floorText');
+
+function evaluatePlayer(reachedFloor) {
+  if (reachedFloor >= 100) return '伝説の勇者';
+  if (reachedFloor >= 80) return '伝説に近い勇者';
+  if (reachedFloor >= 50) return '英雄';
+  if (reachedFloor >= 30) return '勇者';
+  if (reachedFloor >= 10) return '見習い勇者';
+  return '初心者';
+}
+
+function showGameOverUI() {
+  const reached = floor;
+  evalText.textContent = `あなたの評価: ${evaluatePlayer(reached)}`;
+  floorText.textContent = `到達フロア: ${reached}`;
+  overlay.style.display = 'flex';
+  retryBtn.focus();
+}
+function hideGameOverUI() {
+  overlay.style.display = 'none';
+}
+
+/* --- リセット（再挑戦） --- */
+function resetGame() {
+  floor = 1;
+  player.hp = 10;
+  player.maxHp = 10;
+  player.baseAtk = 1;
+  player.randomAtk = 1;
+  killCount = 0;
+  messages = [];
+  nextGrowthThreshold = nextThresholdValue();
+  gameOver = false;
+  hideGameOverUI();
+  generateMap();
+  draw();
 }
 
 /* --- 入力 --- */
