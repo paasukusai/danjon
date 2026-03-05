@@ -3,30 +3,20 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>不思議のダンジョン風ミニゲーム（敵が追跡）</title>
+<title>不思議のダンジョン風ミニゲーム（画像：fighter/slyme/kaidan/potion）</title>
 <style>
   body { background:#111; color:#eee; font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
   canvas { image-rendering: pixelated; border:4px solid #222; background:#000; }
   #hud { margin-top:10px; width:640px; display:flex; justify-content:space-between; }
   .info { background:#1a1a1a; padding:8px 12px; border-radius:6px; }
-  .legend { margin-top:8px; font-size:13px; color:#ccc; }
-  .legend span { display:inline-block; margin-right:12px; }
 </style>
 </head>
 <body>
-<h3>不思議のダンジョン風ミニゲーム（敵が一度隣接したら追跡）</h3>
+<h3>不思議のダンジョン風ミニゲーム</h3>
 <canvas id="game" width="640" height="640"></canvas>
 <div id="hud">
   <div class="info" id="status">HP: 10/10 | Floor: 1</div>
-  <div class="info" id="message">矢印キーで移動。敵は一度隣接すると追いかけてくる。</div>
-</div>
-<div class="legend">
-  <span>🟫 壁</span>
-  <span>⬛ 床</span>
-  <span style="color:#ff6666">🟥 敵（slyme1.png）</span>
-  <span style="color:#ffff66">🟨 階段（kaidan.png）</span>
-  <span style="color:#66ff66">🟩 回復薬</span>
-  <span style="color:#66ccff">🟦 主人公（fighter.png）</span>
+  <div class="info" id="message">矢印キーで移動。敵は一度隣接すると追跡。</div>
 </div>
 
 <script>
@@ -43,13 +33,14 @@ ctx.imageSmoothingEnabled = false;
 
 const TILE = { WALL:0, FLOOR:1, STAIRS:2, POTION:3 };
 
-/* --- 画像アセット --- */
-const fighterImg = new Image(); fighterImg.src = 'fighter.png';
-const enemyImg   = new Image(); enemyImg.src   = 'slyme1.png';
-const stairsImg  = new Image(); stairsImg.src  = 'kaidan.png';
+/* --- 画像アセット（各ファイルを同フォルダに配置） --- */
+const fighterImg = new Image(); fighterImg.src = 'fighter.png'; // 1024x1024 単一画像
+const enemyImg   = new Image(); enemyImg.src   = 'slyme1.png';  // 1024x1024 単一画像
+const stairsImg  = new Image(); stairsImg.src  = 'kaidan.png';  // 1024x1024 単一画像
+const potionImg  = new Image(); potionImg.src  = 'potion.png';  // 768x768 単一画像
 
 let assetsLoaded = 0;
-[fighterImg, enemyImg, stairsImg].forEach(img=>{
+[fighterImg, enemyImg, stairsImg, potionImg].forEach(img=>{
   img.onload = () => { assetsLoaded++; startIfReady(); };
   img.onerror = () => { console.warn(img.src + ' の読み込みに失敗しました。'); startIfReady(); };
 });
@@ -60,7 +51,7 @@ let map = [];
 let seen = [];
 let revealProgress = [];
 let player = { x:0, y:0, hp:10, maxHp:10 };
-let enemies = []; // 敵は {x,y,hp,chasing}
+let enemies = []; // {x,y,hp,chasing}
 let messages = [];
 let gameOver = false;
 
@@ -168,8 +159,8 @@ function draw() {
       if (!isVisible) {
         ctx.fillStyle = (t===TILE.WALL)?'#2a2a2a':'#050505';
         ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-        if (t === TILE.POTION) drawDimRect(x,y,'#2f7f2f');
-        if (t === TILE.STAIRS) drawDimRect(x,y,'#7f7f2f');
+        if (t === TILE.POTION) drawDimImage(x,y,potionImg);
+        if (t === TILE.STAIRS) drawDimImage(x,y,stairsImg);
         continue;
       }
 
@@ -177,8 +168,11 @@ function draw() {
       if (t === TILE.WALL) drawWithAlpha(()=>{ ctx.fillStyle = '#4b4b4b'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
       else drawWithAlpha(()=>{ ctx.fillStyle = '#0b0b0b'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
 
-      if (t === TILE.POTION) drawWithAlpha(()=>{ drawRect(x,y,'#66ff66'); }, alpha);
-      else if (t === TILE.STAIRS) {
+      if (t === TILE.POTION) {
+        if (potionImg.complete && potionImg.naturalWidth !== 0) {
+          drawWithAlpha(()=>{ ctx.drawImage(potionImg, 0, 0, potionImg.width, potionImg.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
+        } else drawWithAlpha(()=>{ drawRect(x,y,'#66ff66'); }, alpha);
+      } else if (t === TILE.STAIRS) {
         if (stairsImg.complete && stairsImg.naturalWidth !== 0) {
           drawWithAlpha(()=>{ ctx.drawImage(stairsImg, 0, 0, stairsImg.width, stairsImg.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
         } else drawWithAlpha(()=>{ drawRect(x,y,'#ffff66'); }, alpha);
@@ -186,7 +180,7 @@ function draw() {
     }
   }
 
-  // 敵描画（見えている場合はフル、見えたことがあるが視界外なら暗く）
+  // 敵描画
   for (const e of enemies) {
     const isSeen = seen[e.y][e.x];
     if (!isSeen) continue;
@@ -216,13 +210,16 @@ function drawWithAlpha(drawFn, alpha) {
   drawFn();
   ctx.restore();
 }
-function drawDimRect(x,y,color){
-  ctx.fillStyle = color;
-  ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12);
-}
-function fillRect(x,y,color){
-  ctx.fillStyle = color;
-  ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+function drawDimImage(x,y,img){
+  if (img.complete && img.naturalWidth !== 0) {
+    ctx.save();
+    ctx.globalAlpha = 0.35;
+    ctx.drawImage(img, 0, 0, img.width, img.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    ctx.restore();
+  } else {
+    ctx.fillStyle = '#444';
+    ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12);
+  }
 }
 function drawRect(x,y,color){
   ctx.fillStyle = color;
@@ -235,7 +232,7 @@ function drawCircle(x,y,color){
   ctx.fill();
 }
 
-/* --- パス探索（BFS） --- */
+/* --- BFS（経路探索） --- */
 function findNextStepBFS(sx,sy,tx,ty) {
   if (sx === tx && sy === ty) return null;
   const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -250,16 +247,13 @@ function findNextStepBFS(sx,sy,tx,ty) {
       const nx = x+dx, ny = y+dy;
       if (nx<0||nx>=MAP_W||ny<0||ny>=MAP_H) continue;
       if (visited[ny][nx]) continue;
-      // 通行可能か（床または階段またはポーション）かつ他の敵がいない（プレイヤーは目的地として許可）
       const tile = map[ny][nx];
       const occupiedByEnemy = enemies.some(e=>e.x===nx && e.y===ny);
       if (tile === TILE.WALL) continue;
-      // 目的地がプレイヤーなら許可（occupiedByEnemy may be false)
       if (occupiedByEnemy && !(nx===tx && ny===ty)) continue;
       visited[ny][nx] = true;
       parent[ny][nx] = [x,y];
       if (nx === tx && ny === ty) {
-        // 経路復元：tx,ty から sx,sy まで戻して一手目を返す
         let cx = tx, cy = ty;
         let prev = parent[cy][cx];
         while (prev && !(prev[0] === sx && prev[1] === sy)) {
@@ -285,7 +279,6 @@ function tryMovePlayer(dx,dy) {
   const enemy = enemies.find(e=>e.x===nx && e.y===ny);
   if (enemy) {
     attackEnemy(enemy);
-    // 攻撃したらその敵は追跡状態になる（隣接した扱い）
     enemy.chasing = true;
   } else {
     player.x = nx; player.y = ny;
@@ -335,16 +328,12 @@ function attackEnemy(enemy) {
 
 /* --- 敵のターン --- */
 function enemiesTurn() {
-  // 敵ごとに処理（配列をコピーしてループすると移動中の衝突を軽減）
   const snapshot = enemies.slice();
   for (const e of snapshot) {
-    // もし敵が既に倒されていたらスキップ
     if (!enemies.includes(e)) continue;
-
     const dx = player.x - e.x, dy = player.y - e.y;
     const manhattan = Math.abs(dx) + Math.abs(dy);
 
-    // 隣接していれば攻撃し、追跡状態にする
     if (manhattan === 1) {
       const dmg = 1 + Math.floor(Math.random()*2);
       player.hp -= dmg;
@@ -353,28 +342,23 @@ function enemiesTurn() {
       continue;
     }
 
-    // 追跡状態なら BFS で次の一手を求める
     if (e.chasing) {
       const next = findNextStepBFS(e.x, e.y, player.x, player.y);
       if (next) {
         const [nx,ny] = next;
-        // 次がプレイヤー位置なら攻撃（念のため）
         if (nx === player.x && ny === player.y) {
           const dmg = 1 + Math.floor(Math.random()*2);
           player.hp -= dmg;
           messages.push(`敵に ${dmg} ダメージを受けた。`);
         } else {
-          // 衝突チェック（他の敵がいるか）
           if (!enemies.some(o=>o !== e && o.x===nx && o.y===ny)) {
             e.x = nx; e.y = ny;
           }
         }
       } else {
-        // 経路が見つからない場合はランダム移動（障害物で詰まったときのフォールバック）
         randomEnemyMove(e);
       }
     } else {
-      // 非追跡状態：プレイヤーに隣接したら追跡フラグを立てる（視界外でも隣接判定で発生）
       if (manhattan === 1) {
         e.chasing = true;
         const dmg = 1 + Math.floor(Math.random()*2);
@@ -382,7 +366,6 @@ function enemiesTurn() {
         messages.push(`敵に ${dmg} ダメージを受けた。`);
         continue;
       }
-      // ランダム移動
       randomEnemyMove(e);
     }
   }
@@ -418,7 +401,8 @@ window.addEventListener('keydown', (e)=>{
 
 /* --- 初期化 --- */
 function startIfReady(){
-  if (assetsLoaded >= 3) {
+  // 4つの画像を待つ
+  if (assetsLoaded >= 4) {
     generateMap();
     draw();
   }
