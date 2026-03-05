@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width,initial-scale=1" />
-<title>不思議のダンジョン風ミニゲーム（体力上限あり）</title>
+<title>不思議のダンジョン風ミニゲーム（視界：周囲4マス）</title>
 <style>
   body { background:#111; color:#eee; font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
   canvas { image-rendering: pixelated; border:4px solid #222; background:#000; }
@@ -14,11 +14,11 @@
 </style>
 </head>
 <body>
-<h3>不思議のダンジョン風ミニゲーム（体力上限あり）</h3>
+<h3>不思議のダンジョン風ミニゲーム（視界：周囲4マス）</h3>
 <canvas id="game" width="640" height="640"></canvas>
 <div id="hud">
   <div class="info" id="status">HP: 10/10 | Floor: 1</div>
-  <div class="info" id="message">矢印キーで移動。階段を目指せ。</div>
+  <div class="info" id="message">矢印キーで移動。周囲4マスが見える。</div>
 </div>
 <div class="legend">
   <span>🟫 壁</span>
@@ -34,6 +34,7 @@
 const TILE_SIZE = 32;
 const MAP_W = 20;
 const MAP_H = 20;
+const VIS_RADIUS = 4; // 主人公の周り何マス見えるか（Chebyshev距離）
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
 canvas.width = MAP_W * TILE_SIZE;
@@ -43,12 +44,9 @@ ctx.imageSmoothingEnabled = false;
 const TILE = { WALL:0, FLOOR:1, STAIRS:2, POTION:3 };
 
 /* --- 画像アセット（任意：同フォルダに配置） --- */
-const fighterImg = new Image();
-fighterImg.src = 'fighter.png';
-const enemyImg = new Image();
-enemyImg.src = 'slyme1.png';
-const stairsImg = new Image();
-stairsImg.src = 'kaidan.png';
+const fighterImg = new Image(); fighterImg.src = 'fighter.png';
+const enemyImg   = new Image(); enemyImg.src   = 'slyme1.png';
+const stairsImg  = new Image(); stairsImg.src  = 'kaidan.png';
 
 let assetsLoaded = 0;
 [fighterImg, enemyImg, stairsImg].forEach(img=>{
@@ -57,9 +55,11 @@ let assetsLoaded = 0;
 });
 
 /* --- ゲーム状態 --- */
-// 体力の上限を持つ（初期上限 10）
 let floor = 1;
 let map = [];
+// 視界管理：seen は一度でも見たタイル、revealProgress はフェードアニメ用（0..1）
+let seen = [];
+let revealProgress = [];
 let player = { x:0, y:0, hp:10, maxHp:10 };
 let enemies = [];
 let messages = [];
@@ -68,6 +68,8 @@ let gameOver = false;
 /* --- マップ生成（drunkard walk） --- */
 function generateMap() {
   map = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(TILE.WALL));
+  seen = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(false));
+  revealProgress = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(0));
   const walkCount = 600;
   let x = Math.floor(MAP_W/2), y = Math.floor(MAP_H/2);
   map[y][x] = TILE.FLOOR;
@@ -85,6 +87,9 @@ function generateMap() {
   enemies = [];
   const enemyCount = 3 + Math.floor(floor/2);
   for (let i=0;i<enemyCount;i++) spawnEnemy();
+
+  // 初期視界を開く
+  revealAround(player.x, player.y);
 }
 
 function placeTileRandom(tileType, count) {
@@ -110,42 +115,144 @@ function spawnEnemy() {
   }
 }
 
+/* --- 視界（FOV）とフェード --- */
+// Chebyshev距離（正方形範囲）で判定
+function inVisRange(px,py,x,y) {
+  return Math.max(Math.abs(px-x), Math.abs(py-y)) <= VIS_RADIUS;
+}
+
+// プレイヤー周囲を「見える」状態にしてフェードインを開始
+function revealAround(px,py) {
+  for (let y=0;y<MAP_H;y++){
+    for (let x=0;x<MAP_W;x++){
+      if (inVisRange(px,py,x,y)) {
+        // 新しく見えるタイルは revealProgress を 0 にしてアニメ開始
+        if (revealProgress[y][x] === 0) {
+          revealProgress[y][x] = 0.001; // 0 を使うと判定で未見と同じ扱いになるため微小値
+        }
+        seen[y][x] = true;
+      }
+    }
+  }
+  // アニメーションを開始
+  animateReveal();
+}
+
+// フェードアニメ：revealProgress を 0->1 にする（簡易）
+let animating = false;
+function animateReveal() {
+  if (animating) return;
+  animating = true;
+  const step = 1/8; // フレーム数（8フレームでフェード）
+  function stepAnim() {
+    let any = false;
+    for (let y=0;y<MAP_H;y++){
+      for (let x=0;x<MAP_W;x++){
+        if (revealProgress[y][x] > 0 && revealProgress[y][x] < 1) {
+          revealProgress[y][x] = Math.min(1, revealProgress[y][x] + step);
+          any = true;
+        }
+      }
+    }
+    draw(); // 再描画
+    if (any) requestAnimationFrame(stepAnim);
+    else animating = false;
+  }
+  requestAnimationFrame(stepAnim);
+}
+
 /* --- 描画 --- */
 function draw() {
+  ctx.clearRect(0,0,canvas.width,canvas.height);
   for (let y=0;y<MAP_H;y++){
     for (let x=0;x<MAP_W;x++){
       const t = map[y][x];
-      if (t === TILE.WALL) fillRect(x,y,'#4b4b4b');
-      else if (t === TILE.FLOOR) fillRect(x,y,'#0b0b0b');
-      else if (t === TILE.POTION) { fillRect(x,y,'#0b0b0b'); drawRect(x,y,'#66ff66'); }
-      else if (t === TILE.STAIRS) {
-        fillRect(x,y,'#0b0b0b');
+      const prog = revealProgress[y][x]; // 0..1
+      const isSeen = seen[y][x];
+      const isVisible = inVisRange(player.x, player.y, x, y);
+
+      // 見えていない（未探索）タイルは真っ黒
+      if (!isSeen) {
+        ctx.fillStyle = '#000';
+        ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        continue;
+      }
+
+      // 見えたことがあるタイルは描画するが、現在視界外なら暗く表示
+      if (!isVisible) {
+        // 暗い床/壁
+        if (t === TILE.WALL) ctx.fillStyle = '#2a2a2a';
+        else ctx.fillStyle = '#050505';
+        ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+        // アイテムや階段は薄く表示
+        if (t === TILE.POTION) drawDimRect(x,y,'#2f7f2f');
+        if (t === TILE.STAIRS) drawDimRect(x,y,'#7f7f2f');
+        continue;
+      }
+
+      // 現在視界内：フェード進行度に応じてアルファで描画（0..1）
+      const alpha = Math.min(1, prog || 1);
+      // 床/壁
+      if (t === TILE.WALL) {
+        drawWithAlpha(()=>{ ctx.fillStyle = '#4b4b4b'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
+      } else {
+        drawWithAlpha(()=>{ ctx.fillStyle = '#0b0b0b'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
+      }
+      // アイテム / 階段（画像があれば画像で、なければ色ブロック）
+      if (t === TILE.POTION) {
+        if (stairsImg && false) {} // placeholder
+        drawWithAlpha(()=>{ drawRect(x,y,'#66ff66'); }, alpha);
+      } else if (t === TILE.STAIRS) {
         if (stairsImg.complete && stairsImg.naturalWidth !== 0) {
-          ctx.drawImage(stairsImg, 0, 0, stairsImg.width, stairsImg.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+          // 画像を縮小して描画（alpha対応）
+          drawWithAlpha(()=>{ ctx.drawImage(stairsImg, 0, 0, stairsImg.width, stairsImg.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
         } else {
-          drawRect(x,y,'#ffff66');
+          drawWithAlpha(()=>{ drawRect(x,y,'#ffff66'); }, alpha);
         }
       }
     }
   }
+
+  // 敵（視界内のみフル表示、視界外は見えていれば暗く表示）
   for (const e of enemies) {
-    if (enemyImg.complete && enemyImg.naturalWidth !== 0) {
-      ctx.drawImage(enemyImg, 0, 0, enemyImg.width, enemyImg.height, e.x*TILE_SIZE, e.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+    const isSeen = seen[e.y][e.x];
+    const isVisible = inVisRange(player.x, player.y, e.x, e.y);
+    if (!isSeen) continue;
+    if (isVisible) {
+      if (enemyImg.complete && enemyImg.naturalWidth !== 0) {
+        ctx.drawImage(enemyImg, 0, 0, enemyImg.width, enemyImg.height, e.x*TILE_SIZE, e.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
+      } else {
+        drawCircle(e.x,e.y,'#ff6666');
+      }
     } else {
-      drawCircle(e.x,e.y,'#ff6666');
+      // 視界外だが一度見た敵は暗く表示（円を暗めに）
+      drawCircle(e.x,e.y,'#5a2a2a');
     }
   }
+
+  // 主人公は常に表示（視界内）
   if (fighterImg.complete && fighterImg.naturalWidth !== 0) {
     ctx.drawImage(fighterImg, 0, 0, fighterImg.width, fighterImg.height, player.x*TILE_SIZE, player.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
   } else {
     drawCircle(player.x, player.y, '#66ccff');
   }
 
+  // HUD
   document.getElementById('status').textContent = `HP: ${player.hp}/${player.maxHp} | Floor: ${floor} | Enemies: ${enemies.length}`;
-  const msg = messages.length ? messages[messages.length-1] : '矢印キーで移動。階段を目指せ。';
+  const msg = messages.length ? messages[messages.length-1] : '矢印キーで移動。周囲4マスが見える。';
   document.getElementById('message').textContent = msg;
 }
 
+function drawWithAlpha(drawFn, alpha) {
+  ctx.save();
+  ctx.globalAlpha = alpha;
+  drawFn();
+  ctx.restore();
+}
+function drawDimRect(x,y,color){
+  ctx.fillStyle = color;
+  ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12);
+}
 function fillRect(x,y,color){
   ctx.fillStyle = color;
   ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -168,7 +275,7 @@ function tryMovePlayer(dx,dy) {
   if (gameOver) return;
   const nx = player.x + dx, ny = player.y + dy;
   if (!inBounds(nx,ny)) return;
-  if (map[ny][nx] === TILE.WALL) { messages.push('壁だ。'); return; }
+  if (map[ny][nx] === TILE.WALL) { messages.push('壁だ。'); draw(); return; }
   const enemy = enemies.find(e=>e.x===nx && e.y===ny);
   if (enemy) {
     attackEnemy(enemy);
@@ -176,9 +283,6 @@ function tryMovePlayer(dx,dy) {
     player.x = nx; player.y = ny;
     const tile = map[ny][nx];
     if (tile === TILE.POTION) {
-      // 回復薬取得時の挙動：
-      // - 体力が満タン（hp === maxHp）のときは上限を +1 し、満タンにする（見た目は満タンのまま上限増加）
-      // - そうでないときは通常回復（上限で打ち止め）
       if (player.hp === player.maxHp) {
         player.maxHp += 1;
         player.hp = player.maxHp;
@@ -191,13 +295,17 @@ function tryMovePlayer(dx,dy) {
     } else if (tile === TILE.STAIRS) {
       floor++;
       messages.push(`階段を下りた。フロア ${floor} へ。`);
-      // 階段での回復は上限を超えないようにする（上限なし増加は回復薬のみ）
       player.hp = Math.min(player.maxHp, player.hp + 2);
       generateMap();
+      draw();
+      return;
     } else {
       messages.push('移動した。');
     }
   }
+  // 視界更新（移動すると周囲が見えるようになる）
+  revealAround(player.x, player.y);
+
   enemiesTurn();
   checkPlayerDead();
   draw();
@@ -253,11 +361,12 @@ window.addEventListener('keydown', (e)=>{
   else if (key === 'ArrowDown' || key === 's' || key === 'S') { tryMovePlayer(0,1); e.preventDefault(); }
   else if (key === 'ArrowLeft' || key === 'a' || key === 'A') { tryMovePlayer(-1,0); e.preventDefault(); }
   else if (key === 'ArrowRight' || key === 'd' || key === 'D') { tryMovePlayer(1,0); e.preventDefault(); }
-  else if (key === ' ') { enemiesTurn(); messages.push('待機した。'); checkPlayerDead(); draw(); e.preventDefault(); }
+  else if (key === ' ') { enemiesTurn(); messages.push('待機した。'); revealAround(player.x, player.y); checkPlayerDead(); draw(); e.preventDefault(); }
 });
 
 /* --- 初期化（画像読み込み待ち） --- */
 function startIfReady(){
+  // 3つの画像を待つ（ローカルで無ければ警告しても開始）
   if (assetsLoaded >= 3) {
     generateMap();
     draw();
