@@ -782,7 +782,6 @@ function hideLogoIfVisible() {
 }
 function showLogoInitially() {
   logoOverlay.classList.remove('hidden');
-  logoAutoHideTimer = setTimeout(()=>{ hideLogoIfVisible(); }, 3000);
   logoOverlay.addEventListener('touchstart', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); }, {passive:false});
   logoOverlay.addEventListener('mousedown', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); });
 }
