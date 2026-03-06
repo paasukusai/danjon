@@ -2,227 +2,208 @@
 <html lang="ja">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width,initial-scale=1" />
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover" />
 <title>勇者、潜ります</title>
 <style>
   :root{
-    --bg:#111;
-    --panel:#1a1a1a;
-    --panel-border:#222;
+    --bg:#0f0f10;
+    --panel:#141414;
     --accent:#66cc66;
-    --muted:#888;
-    --black-track:#0b0b0b;
-    --black-thumb:#222;
-    --thumb-highlight:#444;
+    --muted:#9aa0a6;
+    --btn:#222;
+    --btn-press:#111;
+    --white:#eee;
+  }
+  html,body{height:100%;margin:0;}
+  body {
+    background:var(--bg);
+    color:var(--white);
+    font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:10px;
+    padding:12px;
+    box-sizing:border-box;
   }
 
-  body { background:var(--bg); color:#eee; font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
-  h3 { margin:0 0 12px 0; }
-  canvas { image-rendering: pixelated; border:4px solid var(--panel-border); background:#000; }
-  #hud { margin-top:10px; width:640px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
-  .info { background:var(--panel); padding:8px 12px; border-radius:6px; min-width:200px; text-align:left; border:1px solid #2b2b2b; }
+  /* Game area */
+  .gameWrap { width:100%; max-width:640px; display:flex; flex-direction:column; align-items:center; gap:8px; position:relative; }
+  canvas { image-rendering: pixelated; background:#000; border:4px solid #222; width:100%; height:auto; max-height:80vh; display:block; }
 
-  /* オーディオコントロール */
-  #audioControls { margin-top:12px; display:flex; gap:12px; align-items:center; background:transparent; }
-  .btn { background:#333; color:#fff; border:1px solid #444; padding:6px 10px; border-radius:6px; cursor:pointer; }
-  .btn:active { transform:translateY(1px); }
+  /* HUD */
+  #hud { width:100%; max-width:640px; display:flex; justify-content:space-between; gap:8px; }
+  .info { background:var(--panel); padding:8px 12px; border-radius:8px; min-width:140px; text-align:left; border:1px solid #222; color:var(--white); font-size:14px; }
 
-  /* 黒いデザインの音量バー */
-  .volWrap { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
-  .volLabel { min-width:64px; text-align:right; color:#ddd; }
-
-  input[type="range"] {
-    -webkit-appearance: none;
-    appearance: none;
-    width: 180px;
-    height: 10px;
-    background: transparent;
-    cursor: pointer;
-  }
-
-  /* WebKit track */
-  input[type="range"]::-webkit-slider-runnable-track {
-    height: 10px;
-    background: linear-gradient(90deg, #000 0%, #000 100%);
-    border-radius: 8px;
-    border: 1px solid #111;
-    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
-  }
-  /* WebKit thumb */
-  input[type="range"]::-webkit-slider-thumb {
-    -webkit-appearance: none;
-    appearance: none;
-    margin-top: -6px;
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--black-thumb);
-    border: 2px solid var(--thumb-highlight);
-    box-shadow: 0 1px 0 rgba(255,255,255,0.02);
+  /* Controller (Game Boy like) */
+  .controller {
+    width:100%;
+    max-width:640px;
+    background:linear-gradient(180deg,#0e0e0e,#141414);
+    border:3px solid #222;
+    border-radius:14px;
+    padding:12px;
+    box-sizing:border-box;
+    display:flex;
+    gap:12px;
+    align-items:center;
+    justify-content:space-between;
+    touch-action: manipulation;
+    -webkit-user-select:none;
+    user-select:none;
   }
 
-  /* Firefox track */
-  input[type="range"]::-moz-range-track {
-    height: 10px;
-    background: #000;
-    border-radius: 8px;
-    border: 1px solid #111;
+  /* D-pad: widened horizontally for easier presses */
+  .dpad {
+    width:180px;
+    height:140px;
+    position:relative;
+    display:inline-block;
   }
-  input[type="range"]::-moz-range-thumb {
-    width: 18px;
-    height: 18px;
-    border-radius: 50%;
-    background: var(--black-thumb);
-    border: 2px solid var(--thumb-highlight);
+  .dpad button {
+    position:absolute;
+    width:56px;
+    height:56px;
+    border-radius:10px;
+    background:var(--btn);
+    border:2px solid #2a2a2a;
+    color:var(--white);
+    font-weight:700;
+    font-size:18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    -webkit-tap-highlight-color: transparent;
   }
+  .dpad button:active { background:var(--btn-press); transform:translateY(1px); }
 
-  /* IE/Edge */
-  input[type="range"]::-ms-track {
-    height: 10px;
-    background: transparent;
-    border-color: transparent;
-    color: transparent;
-  }
-  input[type="range"]::-ms-fill-lower { background: #000; border-radius:8px; }
-  input[type="range"]::-ms-fill-upper { background: #000; border-radius:8px; }
-  input[type="range"]::-ms-thumb {
-    width:18px; height:18px; border-radius:50%; background:var(--black-thumb); border:2px solid var(--thumb-highlight);
-  }
+  .dpad .up    { left:62px; top:0; }
+  .dpad .down  { left:62px; bottom:0; top:auto; }
+  .dpad .left  { left:0; top:42px; }
+  .dpad .right { left:124px; top:42px; }
 
-  /* focus outline */
-  input[type="range"]:focus { outline: none; }
-  input[type="range"]:focus::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(102,204,102,0.08); }
+  /* Buttons A/B */
+  .buttons {
+    display:flex;
+    flex-direction:column;
+    gap:12px;
+    align-items:center;
+    justify-content:center;
+    padding-right:8px;
+  }
+  .buttons .row { display:flex; gap:12px; }
+  .btn-large {
+    width:64px;
+    height:64px;
+    border-radius:50%;
+    background:linear-gradient(180deg,#2b2b2b,#1b1b1b);
+    border:3px solid #2a2a2a;
+    color:var(--white);
+    font-weight:800;
+    font-size:18px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .btn-large:active { background:#111; transform:translateY(1px); }
 
-  /* ゲームオーバー用オーバーレイ */
-  #gameOverOverlay {
-    position: fixed; left:0; top:0; width:100vw; height:100vh;
-    display:none; align-items:center; justify-content:center;
-    background: rgba(0,0,0,0.6); z-index:50;
-  }
-  #gameOverBox {
-    background:#1b1b1b; border:2px solid #444; padding:24px; border-radius:10px; text-align:center; min-width:320px;
-  }
-  #gameOverBox h2 { margin:0 0 12px 0; font-size:20px; color:#ffdddd; }
-  #evalText { color:#ffd; margin-bottom:12px; font-weight:700; }
-  #retryBtn {
-    background:var(--accent); color:#062006; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:8px;
-  }
-  #retryBtn:hover { filter:brightness(0.95); }
+  .smallBtns { display:none; }
 
-  @media (max-width:700px){
-    canvas { width:90vw; height:90vw; }
-    #hud { width:90vw; }
-    input[type="range"] { width: 40vw; }
+  /* Logo overlay */
+  .logoOverlay {
+    position:absolute;
+    left:0; top:0;
+    width:100%; height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:linear-gradient(0deg, rgba(0,0,0,0.6), rgba(0,0,0,0.2));
+    z-index:40;
+    transition:opacity 300ms ease;
+  }
+  .logoOverlay.hidden { opacity:0; pointer-events:none; }
+  .logoBox {
+    width:80%;
+    max-width:520px;
+    aspect-ratio:1/1;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:transparent;
+  }
+  .logoBox img { width:100%; height:100%; object-fit:contain; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.6); }
+
+  /* Mobile friendly spacing */
+  @media (max-width:420px){
+    .dpad { width:150px; height:110px; }
+    .dpad button { width:44px; height:44px; border-radius:8px; font-size:16px; }
+    .dpad .up { left:53px; }
+    .dpad .down { left:53px; }
+    .dpad .right { left:106px; }
+    .btn-large { width:56px; height:56px; font-size:16px; }
+    .controller { padding:10px; gap:8px; }
+    .logoBox { max-width:360px; width:86%; }
   }
 </style>
 </head>
 <body>
-<h3>勇者、潜ります</h3>
+<div class="gameWrap" id="gameWrap">
+  <div style="width:100%; display:flex; justify-content:center; position:relative;">
+    <canvas id="game" width="640" height="640" aria-label="ゲーム画面"></canvas>
 
-<div style="position:relative;">
-  <canvas id="game" width="640" height="640"></canvas>
+    <!-- Logo overlay shown at game start -->
+    <div id="logoOverlay" class="logoOverlay" role="dialog" aria-label="ゲームロゴ">
+      <div class="logoBox" id="logoBox">
+        <img id="logoImg" src="logo.png" alt="ゲームロゴ">
+      </div>
+    </div>
+  </div>
 
-  <div id="gameOverOverlay" role="dialog" aria-modal="true">
-    <div id="gameOverBox">
-      <h2>ゲームオーバー</h2>
-      <div id="evalText">あなたの評価: —</div>
-      <div id="floorText" style="color:#ddd; margin-bottom:12px;">到達フロア: 0</div>
-      <button id="retryBtn">再挑戦</button>
+  <div id="hud">
+    <div class="info" id="status">HP: 10/10 | Floor: 1 | Lv: 1</div>
+    <div class="info" id="message">タッチで操作。Aで攻撃、Bで待機。</div>
+  </div>
+
+  <!-- On-screen controller -->
+  <div class="controller" role="application" aria-label="ゲームコントローラ">
+    <div class="dpad" aria-hidden="false">
+      <button class="up" data-action="up" aria-label="上">▲</button>
+      <button class="down" data-action="down" aria-label="下">▼</button>
+      <button class="left" data-action="left" aria-label="左">◀</button>
+      <button class="right" data-action="right" aria-label="右">▶</button>
+    </div>
+
+    <div class="buttons" aria-hidden="false">
+      <div class="row">
+        <button id="btnB" class="btn-large" data-action="wait" aria-label="B ボタン">B</button>
+        <div style="width:8px"></div>
+        <button id="btnA" class="btn-large" data-action="attack" aria-label="A ボタン">A</button>
+      </div>
     </div>
   </div>
 </div>
 
-<div id="hud">
-  <div class="info" id="status">HP: 10/10 | Floor: 1 | Lv: 1</div>
-  <div class="info" id="message">矢印キーで移動。敵は一度隣接すると追跡。</div>
-</div>
-
-<!-- オーディオ要素 -->
-<audio id="bgm" src="bgm.mp3" loop preload="auto"></audio>
-<audio id="gameoverAudio" src="gameover.mp3" preload="auto"></audio>
-
-<!-- 効果音 -->
-<audio id="sfx-hpup" src="hpup.wav" preload="auto"></audio>
-<audio id="sfx-kaishin" src="kaishin.wav" preload="auto"></audio>
-<audio id="sfx-potion" src="potion.wav" preload="auto"></audio>
-<audio id="sfx-atkup" src="atkup.wav" preload="auto"></audio>
-<audio id="sfx-tekiatk" src="tekiatk.wav" preload="auto"></audio>
-<audio id="sfx-kaidan" src="kaidan.wav" preload="auto"></audio>
-<audio id="sfx-kougeki" src="kougeki.wav" preload="auto"></audio>
-
-<!-- 簡易オーディオ操作（停止ボタンは無し、音量バーのみ） -->
-<div id="audioControls">
-  <div class="volWrap" aria-hidden="false">
-    <div class="volLabel">BGM 音量</div>
-    <input id="bgmVol" type="range" min="0" max="1" step="0.05" value="0.5" />
-  </div>
-
-  <div class="volWrap" aria-hidden="false">
-    <div class="volLabel">SFX 音量</div>
-    <input id="sfxVol" type="range" min="0" max="1" step="0.05" value="0.9" />
-  </div>
-</div>
-
 <script>
-/* --- オーディオ管理 --- */
-const bgm = document.getElementById('bgm');
-const gameoverAudio = document.getElementById('gameoverAudio');
-const sfx = {
-  hpup: document.getElementById('sfx-hpup'),
-  kaishin: document.getElementById('sfx-kaishin'),
-  potion: document.getElementById('sfx-potion'),
-  atkup: document.getElementById('sfx-atkup'),
-  tekiatk: document.getElementById('sfx-tekiatk'),
-  kaidan: document.getElementById('sfx-kaidan'),
-  kougeki: document.getElementById('sfx-kougeki')
-};
-const bgmVol = document.getElementById('bgmVol');
-const sfxVol = document.getElementById('sfxVol');
+/* --- ロゴ表示の挙動 ---
+   - ページ読み込み時に logoOverlay を表示
+   - ユーザーが最初に操作（タッチ/クリック/キー）したらオーバーレイをフェードアウトしてゲーム開始（BGM自動開始）
+   - もしくは 3 秒後に自動でフェードアウト（ユーザーが操作しない場合でも見せる）
+*/
 
-let bgmPlaying = false;
-let bgmAutoStarted = false;
-
-bgm.volume = parseFloat(bgmVol.value);
-gameoverAudio.volume = parseFloat(bgmVol.value);
-Object.values(sfx).forEach(a => a.volume = parseFloat(sfxVol.value));
-
-bgmVol.addEventListener('input', () => { bgm.volume = parseFloat(bgmVol.value); gameoverAudio.volume = parseFloat(bgmVol.value); });
-sfxVol.addEventListener('input', () => { Object.values(sfx).forEach(a => a.volume = parseFloat(sfxVol.value)); });
-
-function startBgm() {
-  bgm.play().catch(()=>{});
-  bgmPlaying = true;
-  bgmAutoStarted = true;
-}
-function stopBgm() {
-  bgm.pause();
-  bgmPlaying = false;
-}
-function playGameoverAudio() {
-  try { gameoverAudio.currentTime = 0; gameoverAudio.play().catch(()=>{}); } catch(e){}
-}
-function stopGameoverAudio() {
-  try { gameoverAudio.pause(); gameoverAudio.currentTime = 0; } catch(e){}
-}
-function playSfx(name) {
-  const a = sfx[name];
-  if (!a) return;
-  try { a.currentTime = 0; a.play().catch(()=>{}); } catch(e){}
-}
-
-/* --- ゲーム本体 --- */
+/* --- Canvas / game setup --- */
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 const TILE_SIZE = 32;
 const MAP_W = 20;
 const MAP_H = 20;
 const VIS_RADIUS = 4;
-const canvasEl = document.getElementById('game');
-const ctx = canvasEl.getContext('2d');
-canvasEl.width = MAP_W * TILE_SIZE;
-canvasEl.height = MAP_H * TILE_SIZE;
-ctx.imageSmoothingEnabled = false;
+const logoOverlay = document.getElementById('logoOverlay');
+const logoImg = document.getElementById('logoImg');
 
 const TILE = { WALL:0, FLOOR:1, STAIRS:2, POTION:3 };
 
+/* Assets */
 const assetFiles = {
   fighter: 'fighter.png',
   stairs: 'kaidan.png',
@@ -241,10 +222,26 @@ let assetsLoaded = 0;
 const allImgs = [fighterImg, stairsImg, potionImg, ...enemyImgs];
 allImgs.forEach(img=>{
   img.onload = () => { assetsLoaded++; startIfReady(); };
-  img.onerror = () => { console.warn(img.src + ' の読み込みに失敗'); assetsLoaded++; startIfReady(); };
+  img.onerror = () => { assetsLoaded++; startIfReady(); };
 });
 
-/* --- ゲーム状態 --- */
+/* Audio */
+const bgm = new Audio('bgm.mp3'); bgm.loop = true; bgm.preload = 'auto';
+const gameoverAudio = new Audio('gameover.mp3'); gameoverAudio.preload = 'auto';
+const sfx = {
+  hpup: new Audio('hpup.wav'),
+  kaishin: new Audio('kaishin.wav'),
+  potion: new Audio('potion.wav'),
+  atkup: new Audio('atkup.wav'),
+  tekiatk: new Audio('tekiatk.wav'),
+  kaidan: new Audio('kaidan.wav'),
+  kougeki: new Audio('kougeki.wav')
+};
+Object.values(sfx).forEach(a=>{ a.preload='auto'; });
+
+let bgmAutoStarted = false;
+
+/* Game state */
 let floor = 1;
 let map = [];
 let seen = [];
@@ -255,18 +252,18 @@ let killCount = 0;
 let messages = [];
 let gameOver = false;
 
-/* --- 敵攻撃力（10Fごとに +5） --- */
+/* Enemy attack scaling */
 const enemyBaseAtk = 1;
 function enemyAtkForFloor(floorNumber) {
   const step = Math.floor((floorNumber - 1) / 10);
   return enemyBaseAtk + step * 5;
 }
 
-/* --- 成長閾値（ランダム 10〜12） --- */
+/* Growth threshold */
 function nextThresholdValue() { return 10 + Math.floor(Math.random() * 3); }
 let nextGrowthThreshold = nextThresholdValue();
 
-/* --- マップ生成 --- */
+/* Map generation */
 function generateMap() {
   map = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(TILE.WALL));
   seen = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(false));
@@ -314,7 +311,7 @@ function spawnEnemy() {
   }
 }
 
-/* --- 視界 --- */
+/* Visibility */
 function inVisRange(px,py,x,y) {
   return Math.max(Math.abs(px-x), Math.abs(py-y)) <= VIS_RADIUS;
 }
@@ -351,16 +348,16 @@ function animateReveal() {
   requestAnimationFrame(stepAnim);
 }
 
-/* --- 敵画像選択（10Fごと、91F以降は enem.png 固定） --- */
+/* Enemy image selection */
 function enemyImageForFloor(floorNumber) {
   let idx = Math.floor((floorNumber - 1) / 10);
   if (idx >= enemyImgs.length - 1) idx = enemyImgs.length - 1;
   return enemyImgs[idx];
 }
 
-/* --- 描画 --- */
+/* Drawing */
 function draw() {
-  ctx.clearRect(0,0,canvasEl.width,canvasEl.height);
+  ctx.clearRect(0,0,canvas.width,canvas.height);
   for (let y=0;y<MAP_H;y++){
     for (let x=0;x<MAP_W;x++){
       const t = map[y][x];
@@ -413,7 +410,7 @@ function draw() {
   } else drawCircle(player.x, player.y, '#66ccff');
 
   document.getElementById('status').textContent = `HP: ${player.hp}/${player.maxHp} | Floor: ${floor} | Lv: ${player.baseAtk}`;
-  const msg = messages.length ? messages[messages.length-1] : '矢印キーで移動。';
+  const msg = messages.length ? messages[messages.length-1] : 'タッチで操作。';
   document.getElementById('message').textContent = msg;
 }
 
@@ -422,7 +419,7 @@ function drawDimImage(x,y,img){ if (img.complete && img.naturalWidth !== 0) { ct
 function drawRect(x,y,color){ ctx.fillStyle = color; ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12); }
 function drawCircle(x,y,color){ ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x*TILE_SIZE + TILE_SIZE/2, y*TILE_SIZE + TILE_SIZE/2, TILE_SIZE/2 - 4, 0, Math.PI*2); ctx.fill(); }
 
-/* --- BFS --- */
+/* BFS */
 function findNextStepBFS(sx,sy,tx,ty) {
   if (sx === tx && sy === ty) return null;
   const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -458,7 +455,14 @@ function findNextStepBFS(sx,sy,tx,ty) {
   return null;
 }
 
-/* --- 成長ロジック --- */
+/* SFX */
+function playSfx(name) {
+  const a = sfx[name];
+  if (!a) return;
+  try { a.currentTime = 0; a.play().catch(()=>{}); } catch(e){}
+}
+
+/* Growth */
 function onEnemyKilled() {
   killCount++;
   playSfx('kaishin');
@@ -471,11 +475,14 @@ function onEnemyKilled() {
   messages.push('敵を倒した。');
 }
 
-/* --- ゲームロジック --- */
+/* Game logic */
 function inBounds(x,y){ return x>=0 && x<MAP_W && y>=0 && y<MAP_H; }
 
 function startBgmIfNeeded() {
-  if (!bgmAutoStarted && !gameOver) startBgm();
+  if (!bgmAutoStarted && !gameOver) {
+    bgm.play().catch(()=>{});
+    bgmAutoStarted = true;
+  }
 }
 
 function tryMovePlayer(dx,dy) {
@@ -521,7 +528,7 @@ function tryMovePlayer(dx,dy) {
   draw();
 }
 
-/* --- プレイヤー攻撃 --- */
+/* Attack */
 function attackEnemy(enemy) {
   startBgmIfNeeded();
   const rand = Math.floor(Math.random() * (player.randomAtk + 1));
@@ -535,7 +542,7 @@ function attackEnemy(enemy) {
   }
 }
 
-/* --- 敵のターン --- */
+/* Enemy turn */
 function enemiesTurn() {
   const snapshot = enemies.slice();
   const currentEnemyAtk = enemyAtkForFloor(floor);
@@ -598,25 +605,14 @@ function checkPlayerDead() {
     gameOver = true;
     messages.push('あなたは倒れた…');
     draw();
-    stopBgm();
-    stopAllSfx();
-    playGameoverAudio();
+    bgm.pause();
+    Object.values(sfx).forEach(a=>{ try{ a.pause(); a.currentTime=0; }catch(e){} });
+    try { gameoverAudio.currentTime = 0; gameoverAudio.play().catch(()=>{}); } catch(e){}
     showGameOverUI();
   }
 }
 
-function stopAllSfx() {
-  Object.values(sfx).forEach(a => {
-    try { a.pause(); a.currentTime = 0; } catch(e){}
-  });
-}
-
-/* --- ゲームオーバー UI --- */
-const overlay = document.getElementById('gameOverOverlay');
-const retryBtn = document.getElementById('retryBtn');
-const evalText = document.getElementById('evalText');
-const floorText = document.getElementById('floorText');
-
+/* Game over UI (simple HUD message) */
 function evaluatePlayer(reachedFloor) {
   if (reachedFloor >= 100) return '伝説の勇者';
   if (reachedFloor >= 80) return '伝説に近い勇者';
@@ -625,21 +621,79 @@ function evaluatePlayer(reachedFloor) {
   if (reachedFloor >= 10) return '見習い勇者';
   return '初心者';
 }
-
 function showGameOverUI() {
-  const reached = floor;
-  evalText.textContent = `あなたの評価: ${evaluatePlayer(reached)}`;
-  floorText.textContent = `到達フロア: ${reached}`;
-  overlay.style.display = 'flex';
-  retryBtn.focus();
-}
-function hideGameOverUI() {
-  overlay.style.display = 'none';
+  document.getElementById('message').textContent = `ゲームオーバー — 到達フロア: ${floor} | 評価: ${evaluatePlayer(floor)}`;
 }
 
-/* --- リセット（再挑戦） --- */
+/* Input: keyboard */
+window.addEventListener('keydown', (e)=>{
+  if (gameOver) return;
+  startBgmIfNeeded();
+  hideLogoIfVisible();
+  const key = e.key;
+  if (key === 'ArrowUp' || key === 'w' || key === 'W') { tryMovePlayer(0,-1); e.preventDefault(); }
+  else if (key === 'ArrowDown' || key === 's' || key === 'S') { tryMovePlayer(0,1); e.preventDefault(); }
+  else if (key === 'ArrowLeft' || key === 'a' || key === 'A') { tryMovePlayer(-1,0); e.preventDefault(); }
+  else if (key === 'ArrowRight' || key === 'd' || key === 'D') { tryMovePlayer(1,0); e.preventDefault(); }
+  else if (key === ' ') { enemiesTurn(); messages.push('待機した。'); revealAround(player.x, player.y); checkPlayerDead(); draw(); e.preventDefault(); }
+});
+
+/* Touch / controller binding */
+function bindController() {
+  const actions = document.querySelectorAll('[data-action]');
+  actions.forEach(btn=>{
+    const action = btn.getAttribute('data-action');
+    const startHandler = (ev) => {
+      ev.preventDefault();
+      startBgmIfNeeded();
+      hideLogoIfVisible();
+      if (action === 'up') tryMovePlayer(0,-1);
+      if (action === 'down') tryMovePlayer(0,1);
+      if (action === 'left') tryMovePlayer(-1,0);
+      if (action === 'right') tryMovePlayer(1,0);
+      if (action === 'attack') {
+        const enemy = enemies.find(e=>Math.abs(e.x-player.x)+Math.abs(e.y-player.y)===1);
+        if (enemy) attackEnemy(enemy);
+        else messages.push('攻撃したが敵はいない。');
+        enemiesTurn();
+        revealAround(player.x, player.y);
+        checkPlayerDead();
+        draw();
+      }
+      if (action === 'wait') {
+        enemiesTurn();
+        messages.push('待機した。');
+        revealAround(player.x, player.y);
+        checkPlayerDead();
+        draw();
+      }
+    };
+    btn.addEventListener('touchstart', startHandler, {passive:false});
+    btn.addEventListener('mousedown', startHandler);
+  });
+}
+
+/* Logo overlay behavior */
+let logoAutoHideTimer = null;
+function hideLogoIfVisible() {
+  if (!logoOverlay || logoOverlay.classList.contains('hidden')) return;
+  logoOverlay.classList.add('hidden');
+  // remove from DOM after transition
+  setTimeout(()=>{ if (logoOverlay && logoOverlay.parentNode) logoOverlay.parentNode.removeChild(logoOverlay); }, 350);
+}
+function showLogoInitially() {
+  // If logo image not loaded, still show overlay; it will display when available
+  logoOverlay.classList.remove('hidden');
+  // auto-hide after 3 seconds if user doesn't interact
+  logoAutoHideTimer = setTimeout(()=>{ hideLogoIfVisible(); }, 3000);
+  // clicking/touching overlay hides it and starts BGM
+  logoOverlay.addEventListener('touchstart', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); }, {passive:false});
+  logoOverlay.addEventListener('mousedown', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); });
+}
+
+/* Reset / start */
 function resetGame() {
-  stopGameoverAudio();
+  try { gameoverAudio.pause(); gameoverAudio.currentTime = 0; } catch(e){}
   floor = 1;
   player.hp = 10;
   player.maxHp = 10;
@@ -649,35 +703,23 @@ function resetGame() {
   messages = [];
   nextGrowthThreshold = nextThresholdValue();
   gameOver = false;
-  hideGameOverUI();
   generateMap();
   draw();
-  if (bgmAutoStarted) startBgm();
+  if (bgmAutoStarted) bgm.play().catch(()=>{});
 }
 
-/* --- 入力 --- */
-window.addEventListener('keydown', (e)=>{
-  if (gameOver) return;
-  startBgmIfNeeded();
-  const key = e.key;
-  if (key === 'ArrowUp' || key === 'w' || key === 'W') { tryMovePlayer(0,-1); e.preventDefault(); }
-  else if (key === 'ArrowDown' || key === 's' || key === 'S') { tryMovePlayer(0,1); e.preventDefault(); }
-  else if (key === 'ArrowLeft' || key === 'a' || key === 'A') { tryMovePlayer(-1,0); e.preventDefault(); }
-  else if (key === 'ArrowRight' || key === 'd' || key === 'D') { tryMovePlayer(1,0); e.preventDefault(); }
-  else if (key === ' ') { enemiesTurn(); messages.push('待機した。'); revealAround(player.x, player.y); checkPlayerDead(); draw(); e.preventDefault(); }
-});
-canvasEl.addEventListener('mousedown', () => { startBgmIfNeeded(); });
-
-/* --- 再挑戦ボタン --- */
-retryBtn.addEventListener('click', () => { resetGame(); });
-
-/* --- 初期化 --- */
+/* Initialization */
 function startIfReady(){
   if (assetsLoaded >= allImgs.length) {
     generateMap();
     draw();
+    bindController();
+    showLogoInitially();
   }
 }
+
+/* Start */
+startIfReady();
 </script>
 </body>
 </html>
