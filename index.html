@@ -5,10 +5,95 @@
 <meta name="viewport" content="width=device-width,initial-scale=1" />
 <title>勇者、潜ります</title>
 <style>
-  body { background:#111; color:#eee; font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
-  canvas { image-rendering: pixelated; border:4px solid #222; background:#000; }
+  :root{
+    --bg:#111;
+    --panel:#1a1a1a;
+    --panel-border:#222;
+    --accent:#66cc66;
+    --muted:#888;
+    --black-track:#0b0b0b;
+    --black-thumb:#222;
+    --thumb-highlight:#444;
+  }
+
+  body { background:var(--bg); color:#eee; font-family: system-ui, "Hiragino Kaku Gothic ProN", "メイリオ", sans-serif; display:flex; flex-direction:column; align-items:center; padding:20px; }
+  h3 { margin:0 0 12px 0; }
+  canvas { image-rendering: pixelated; border:4px solid var(--panel-border); background:#000; }
   #hud { margin-top:10px; width:640px; display:flex; justify-content:space-between; gap:8px; flex-wrap:wrap; }
-  .info { background:#1a1a1a; padding:8px 12px; border-radius:6px; min-width:200px; text-align:left; }
+  .info { background:var(--panel); padding:8px 12px; border-radius:6px; min-width:200px; text-align:left; border:1px solid #2b2b2b; }
+
+  /* オーディオコントロール */
+  #audioControls { margin-top:12px; display:flex; gap:12px; align-items:center; background:transparent; }
+  .btn { background:#333; color:#fff; border:1px solid #444; padding:6px 10px; border-radius:6px; cursor:pointer; }
+  .btn:active { transform:translateY(1px); }
+
+  /* 黒いデザインの音量バー */
+  .volWrap { display:flex; align-items:center; gap:8px; color:var(--muted); font-size:13px; }
+  .volLabel { min-width:64px; text-align:right; color:#ddd; }
+
+  input[type="range"] {
+    -webkit-appearance: none;
+    appearance: none;
+    width: 180px;
+    height: 10px;
+    background: transparent;
+    cursor: pointer;
+  }
+
+  /* WebKit track */
+  input[type="range"]::-webkit-slider-runnable-track {
+    height: 10px;
+    background: linear-gradient(90deg, #000 0%, #000 100%);
+    border-radius: 8px;
+    border: 1px solid #111;
+    box-shadow: inset 0 1px 0 rgba(255,255,255,0.02);
+  }
+  /* WebKit thumb */
+  input[type="range"]::-webkit-slider-thumb {
+    -webkit-appearance: none;
+    appearance: none;
+    margin-top: -6px;
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--black-thumb);
+    border: 2px solid var(--thumb-highlight);
+    box-shadow: 0 1px 0 rgba(255,255,255,0.02);
+  }
+
+  /* Firefox track */
+  input[type="range"]::-moz-range-track {
+    height: 10px;
+    background: #000;
+    border-radius: 8px;
+    border: 1px solid #111;
+  }
+  input[type="range"]::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    border-radius: 50%;
+    background: var(--black-thumb);
+    border: 2px solid var(--thumb-highlight);
+  }
+
+  /* IE/Edge */
+  input[type="range"]::-ms-track {
+    height: 10px;
+    background: transparent;
+    border-color: transparent;
+    color: transparent;
+  }
+  input[type="range"]::-ms-fill-lower { background: #000; border-radius:8px; }
+  input[type="range"]::-ms-fill-upper { background: #000; border-radius:8px; }
+  input[type="range"]::-ms-thumb {
+    width:18px; height:18px; border-radius:50%; background:var(--black-thumb); border:2px solid var(--thumb-highlight);
+  }
+
+  /* focus outline */
+  input[type="range"]:focus { outline: none; }
+  input[type="range"]:focus::-webkit-slider-thumb { box-shadow: 0 0 0 4px rgba(102,204,102,0.08); }
+
+  /* ゲームオーバー用オーバーレイ */
   #gameOverOverlay {
     position: fixed; left:0; top:0; width:100vw; height:100vh;
     display:none; align-items:center; justify-content:center;
@@ -20,12 +105,14 @@
   #gameOverBox h2 { margin:0 0 12px 0; font-size:20px; color:#ffdddd; }
   #evalText { color:#ffd; margin-bottom:12px; font-weight:700; }
   #retryBtn {
-    background:#66cc66; color:#062006; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:8px;
+    background:var(--accent); color:#062006; border:none; padding:10px 18px; border-radius:8px; font-weight:700; cursor:pointer; margin-top:8px;
   }
   #retryBtn:hover { filter:brightness(0.95); }
+
   @media (max-width:700px){
     canvas { width:90vw; height:90vw; }
     #hud { width:90vw; }
+    input[type="range"] { width: 40vw; }
   }
 </style>
 </head>
@@ -50,39 +137,101 @@
   <div class="info" id="message">矢印キーで移動。敵は一度隣接すると追跡。</div>
 </div>
 
+<!-- オーディオ要素 -->
+<audio id="bgm" src="bgm.mp3" loop preload="auto"></audio>
+<audio id="gameoverAudio" src="gameover.mp3" preload="auto"></audio>
+
+<!-- 効果音 -->
+<audio id="sfx-hpup" src="hpup.wav" preload="auto"></audio>
+<audio id="sfx-kaishin" src="kaishin.wav" preload="auto"></audio>
+<audio id="sfx-potion" src="potion.wav" preload="auto"></audio>
+<audio id="sfx-atkup" src="atkup.wav" preload="auto"></audio>
+<audio id="sfx-tekiatk" src="tekiatk.wav" preload="auto"></audio>
+<audio id="sfx-kaidan" src="kaidan.wav" preload="auto"></audio>
+<audio id="sfx-kougeki" src="kougeki.wav" preload="auto"></audio>
+
+<!-- 簡易オーディオ操作（停止ボタンは無し、音量バーのみ） -->
+<div id="audioControls">
+  <div class="volWrap" aria-hidden="false">
+    <div class="volLabel">BGM 音量</div>
+    <input id="bgmVol" type="range" min="0" max="1" step="0.05" value="0.5" />
+  </div>
+
+  <div class="volWrap" aria-hidden="false">
+    <div class="volLabel">SFX 音量</div>
+    <input id="sfxVol" type="range" min="0" max="1" step="0.05" value="0.9" />
+  </div>
+</div>
+
 <script>
-/* --- 基本設定 --- */
+/* --- オーディオ管理 --- */
+const bgm = document.getElementById('bgm');
+const gameoverAudio = document.getElementById('gameoverAudio');
+const sfx = {
+  hpup: document.getElementById('sfx-hpup'),
+  kaishin: document.getElementById('sfx-kaishin'),
+  potion: document.getElementById('sfx-potion'),
+  atkup: document.getElementById('sfx-atkup'),
+  tekiatk: document.getElementById('sfx-tekiatk'),
+  kaidan: document.getElementById('sfx-kaidan'),
+  kougeki: document.getElementById('sfx-kougeki')
+};
+const bgmVol = document.getElementById('bgmVol');
+const sfxVol = document.getElementById('sfxVol');
+
+let bgmPlaying = false;
+let bgmAutoStarted = false;
+
+bgm.volume = parseFloat(bgmVol.value);
+gameoverAudio.volume = parseFloat(bgmVol.value);
+Object.values(sfx).forEach(a => a.volume = parseFloat(sfxVol.value));
+
+bgmVol.addEventListener('input', () => { bgm.volume = parseFloat(bgmVol.value); gameoverAudio.volume = parseFloat(bgmVol.value); });
+sfxVol.addEventListener('input', () => { Object.values(sfx).forEach(a => a.volume = parseFloat(sfxVol.value)); });
+
+function startBgm() {
+  bgm.play().catch(()=>{});
+  bgmPlaying = true;
+  bgmAutoStarted = true;
+}
+function stopBgm() {
+  bgm.pause();
+  bgmPlaying = false;
+}
+function playGameoverAudio() {
+  try { gameoverAudio.currentTime = 0; gameoverAudio.play().catch(()=>{}); } catch(e){}
+}
+function stopGameoverAudio() {
+  try { gameoverAudio.pause(); gameoverAudio.currentTime = 0; } catch(e){}
+}
+function playSfx(name) {
+  const a = sfx[name];
+  if (!a) return;
+  try { a.currentTime = 0; a.play().catch(()=>{}); } catch(e){}
+}
+
+/* --- ゲーム本体 --- */
 const TILE_SIZE = 32;
 const MAP_W = 20;
 const MAP_H = 20;
 const VIS_RADIUS = 4;
-const canvas = document.getElementById('game');
-const ctx = canvas.getContext('2d');
-canvas.width = MAP_W * TILE_SIZE;
-canvas.height = MAP_H * TILE_SIZE;
+const canvasEl = document.getElementById('game');
+const ctx = canvasEl.getContext('2d');
+canvasEl.width = MAP_W * TILE_SIZE;
+canvasEl.height = MAP_H * TILE_SIZE;
 ctx.imageSmoothingEnabled = false;
 
 const TILE = { WALL:0, FLOOR:1, STAIRS:2, POTION:3 };
 
-/* --- 画像アセット --- */
 const assetFiles = {
   fighter: 'fighter.png',
   stairs: 'kaidan.png',
   potion: 'potion.png',
   enemies: [
-    'slyme1.png',  // 1–10F
-    'goblin.png',  // 11–20F
-    'owk.png',     // 21–30F
-    'wolf.png',    // 31–40F
-    'spider.png',  // 41–50F
-    'skelton.png', // 51–60F
-    'mino.png',    // 61–70F
-    'golem.png',   // 71–80F
-    'demon.png',   // 81–90F
-    'enem.png'     // 91F〜固定
+    'slyme1.png','goblin.png','owk.png','wolf.png','spider.png',
+    'skelton.png','mino.png','golem.png','demon.png','enem.png'
   ]
 };
-
 const fighterImg = new Image(); fighterImg.src = assetFiles.fighter;
 const stairsImg  = new Image(); stairsImg.src  = assetFiles.stairs;
 const potionImg  = new Image(); potionImg.src  = assetFiles.potion;
@@ -92,7 +241,7 @@ let assetsLoaded = 0;
 const allImgs = [fighterImg, stairsImg, potionImg, ...enemyImgs];
 allImgs.forEach(img=>{
   img.onload = () => { assetsLoaded++; startIfReady(); };
-  img.onerror = () => { console.warn(img.src + ' の読み込みに失敗しました。'); assetsLoaded++; startIfReady(); };
+  img.onerror = () => { console.warn(img.src + ' の読み込みに失敗'); assetsLoaded++; startIfReady(); };
 });
 
 /* --- ゲーム状態 --- */
@@ -100,19 +249,13 @@ let floor = 1;
 let map = [];
 let seen = [];
 let revealProgress = [];
-let player = {
-  x:0, y:0,
-  hp:10,
-  maxHp:10,
-  baseAtk:1,
-  randomAtk:1
-};
-let enemies = []; // {x,y,hp,chasing}
+let player = { x:0, y:0, hp:10, maxHp:10, baseAtk:1, randomAtk:1 };
+let enemies = [];
 let killCount = 0;
 let messages = [];
 let gameOver = false;
 
-/* --- 敵攻撃力基準（10フロアごとに +5） --- */
+/* --- 敵攻撃力（10Fごとに +5） --- */
 const enemyBaseAtk = 1;
 function enemyAtkForFloor(floorNumber) {
   const step = Math.floor((floorNumber - 1) / 10);
@@ -120,7 +263,7 @@ function enemyAtkForFloor(floorNumber) {
 }
 
 /* --- 成長閾値（ランダム 10〜12） --- */
-function nextThresholdValue() { return 10 + Math.floor(Math.random() * 3); } // 10,11,12
+function nextThresholdValue() { return 10 + Math.floor(Math.random() * 3); }
 let nextGrowthThreshold = nextThresholdValue();
 
 /* --- マップ生成 --- */
@@ -128,11 +271,9 @@ function generateMap() {
   map = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(TILE.WALL));
   seen = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(false));
   revealProgress = Array.from({length:MAP_H}, ()=>Array(MAP_W).fill(0));
-
   const walkCount = 600;
   let x = Math.floor(MAP_W/2), y = Math.floor(MAP_H/2);
   map[y][x] = TILE.FLOOR;
-
   for (let i=0;i<walkCount;i++){
     const dir = Math.floor(Math.random()*4);
     if (dir===0 && x>1) x--;
@@ -141,16 +282,12 @@ function generateMap() {
     if (dir===3 && y<MAP_H-2) y++;
     map[y][x] = TILE.FLOOR;
   }
-
   player.x = x; player.y = y;
-
   placeTileRandom(TILE.STAIRS, 1);
   placeTileRandom(TILE.POTION, 3 + Math.floor(floor/2));
-
   enemies = [];
   const enemyCount = 3 + Math.floor(floor/2);
   for (let i=0;i<enemyCount;i++) spawnEnemy();
-
   revealAround(player.x, player.y);
 }
 
@@ -223,21 +360,18 @@ function enemyImageForFloor(floorNumber) {
 
 /* --- 描画 --- */
 function draw() {
-  ctx.clearRect(0,0,canvas.width,canvas.height);
-
+  ctx.clearRect(0,0,canvasEl.width,canvasEl.height);
   for (let y=0;y<MAP_H;y++){
     for (let x=0;x<MAP_W;x++){
       const t = map[y][x];
       const prog = revealProgress[y][x];
       const isSeen = seen[y][x];
       const isVisible = inVisRange(player.x, player.y, x, y);
-
       if (!isSeen) {
         ctx.fillStyle = '#000';
         ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
         continue;
       }
-
       if (!isVisible) {
         ctx.fillStyle = (t===TILE.WALL)?'#2a2a2a':'#050505';
         ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
@@ -245,11 +379,9 @@ function draw() {
         if (t === TILE.STAIRS) drawDimImage(x,y,stairsImg);
         continue;
       }
-
       const alpha = Math.min(1, prog || 1);
       if (t === TILE.WALL) drawWithAlpha(()=>{ ctx.fillStyle = '#4b4b4b'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
       else drawWithAlpha(()=>{ ctx.fillStyle = '#0b0b0b'; ctx.fillRect(x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
-
       if (t === TILE.POTION) {
         if (potionImg.complete && potionImg.naturalWidth !== 0) {
           drawWithAlpha(()=>{ ctx.drawImage(potionImg, 0, 0, potionImg.width, potionImg.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); }, alpha);
@@ -285,35 +417,12 @@ function draw() {
   document.getElementById('message').textContent = msg;
 }
 
-function drawWithAlpha(drawFn, alpha) {
-  ctx.save();
-  ctx.globalAlpha = alpha;
-  drawFn();
-  ctx.restore();
-}
-function drawDimImage(x,y,img){
-  if (img.complete && img.naturalWidth !== 0) {
-    ctx.save();
-    ctx.globalAlpha = 0.35;
-    ctx.drawImage(img, 0, 0, img.width, img.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
-    ctx.restore();
-  } else {
-    ctx.fillStyle = '#444';
-    ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12);
-  }
-}
-function drawRect(x,y,color){
-  ctx.fillStyle = color;
-  ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12);
-}
-function drawCircle(x,y,color){
-  ctx.fillStyle = color;
-  ctx.beginPath();
-  ctx.arc(x*TILE_SIZE + TILE_SIZE/2, y*TILE_SIZE + TILE_SIZE/2, TILE_SIZE/2 - 4, 0, Math.PI*2);
-  ctx.fill();
-}
+function drawWithAlpha(drawFn, alpha) { ctx.save(); ctx.globalAlpha = alpha; drawFn(); ctx.restore(); }
+function drawDimImage(x,y,img){ if (img.complete && img.naturalWidth !== 0) { ctx.save(); ctx.globalAlpha = 0.35; ctx.drawImage(img, 0, 0, img.width, img.height, x*TILE_SIZE, y*TILE_SIZE, TILE_SIZE, TILE_SIZE); ctx.restore(); } else { ctx.fillStyle = '#444'; ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12); } }
+function drawRect(x,y,color){ ctx.fillStyle = color; ctx.fillRect(x*TILE_SIZE+6, y*TILE_SIZE+6, TILE_SIZE-12, TILE_SIZE-12); }
+function drawCircle(x,y,color){ ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x*TILE_SIZE + TILE_SIZE/2, y*TILE_SIZE + TILE_SIZE/2, TILE_SIZE/2 - 4, 0, Math.PI*2); ctx.fill(); }
 
-/* --- BFS（経路探索） --- */
+/* --- BFS --- */
 function findNextStepBFS(sx,sy,tx,ty) {
   if (sx === tx && sy === ty) return null;
   const dirs = [[1,0],[-1,0],[0,1],[0,-1]];
@@ -349,13 +458,15 @@ function findNextStepBFS(sx,sy,tx,ty) {
   return null;
 }
 
-/* --- 成長ロジック（成長時に baseAtk と randomAtk の両方を +1） --- */
+/* --- 成長ロジック --- */
 function onEnemyKilled() {
   killCount++;
+  playSfx('kaishin');
   if (killCount >= nextGrowthThreshold) {
     player.baseAtk += 1;
     player.randomAtk += 1;
     nextGrowthThreshold = killCount + nextThresholdValue();
+    playSfx('atkup');
   }
   messages.push('敵を倒した。');
 }
@@ -363,8 +474,13 @@ function onEnemyKilled() {
 /* --- ゲームロジック --- */
 function inBounds(x,y){ return x>=0 && x<MAP_W && y>=0 && y<MAP_H; }
 
+function startBgmIfNeeded() {
+  if (!bgmAutoStarted && !gameOver) startBgm();
+}
+
 function tryMovePlayer(dx,dy) {
   if (gameOver) return;
+  startBgmIfNeeded();
   const nx = player.x + dx, ny = player.y + dy;
   if (!inBounds(nx,ny)) return;
   if (map[ny][nx] === TILE.WALL) { messages.push('壁だ。'); draw(); return; }
@@ -380,15 +496,18 @@ function tryMovePlayer(dx,dy) {
         player.maxHp += 1;
         player.hp = player.maxHp;
         messages.push('満タンだったので体力上限が1上がった！');
+        playSfx('hpup');
       } else {
         player.hp = Math.min(player.maxHp, player.hp + 5);
         messages.push('回復薬を拾った。HP回復！');
+        playSfx('potion');
       }
       map[ny][nx] = TILE.FLOOR;
     } else if (tile === TILE.STAIRS) {
       floor++;
       messages.push(`階段を下りた。フロア ${floor} へ。`);
       player.hp = Math.min(player.maxHp, player.hp + 2);
+      playSfx('kaidan');
       generateMap();
       draw();
       return;
@@ -404,15 +523,16 @@ function tryMovePlayer(dx,dy) {
 
 /* --- プレイヤー攻撃 --- */
 function attackEnemy(enemy) {
+  startBgmIfNeeded();
   const rand = Math.floor(Math.random() * (player.randomAtk + 1));
   const dmg = player.baseAtk + rand;
   enemy.hp -= dmg;
   messages.push(`敵に ${dmg} ダメージ！`);
+  playSfx('kougeki');
   if (enemy.hp <= 0) {
     enemies = enemies.filter(e=>e!==enemy);
     onEnemyKilled();
   }
-  // 敵の反撃は無し
 }
 
 /* --- 敵のターン --- */
@@ -429,6 +549,7 @@ function enemiesTurn() {
       player.hp -= dmg;
       e.chasing = true;
       messages.push(`敵に ${dmg} ダメージを受けた。`);
+      playSfx('tekiatk');
       continue;
     }
 
@@ -440,6 +561,7 @@ function enemiesTurn() {
           const dmg = currentEnemyAtk;
           player.hp -= dmg;
           messages.push(`敵に ${dmg} ダメージを受けた。`);
+          playSfx('tekiatk');
         } else {
           if (!enemies.some(o=>o !== e && o.x===nx && o.y===ny)) {
             e.x = nx; e.y = ny;
@@ -454,6 +576,7 @@ function enemiesTurn() {
         const dmg = currentEnemyAtk;
         player.hp -= dmg;
         messages.push(`敵に ${dmg} ダメージを受けた。`);
+        playSfx('tekiatk');
         continue;
       }
       randomEnemyMove(e);
@@ -475,8 +598,17 @@ function checkPlayerDead() {
     gameOver = true;
     messages.push('あなたは倒れた…');
     draw();
+    stopBgm();
+    stopAllSfx();
+    playGameoverAudio();
     showGameOverUI();
   }
+}
+
+function stopAllSfx() {
+  Object.values(sfx).forEach(a => {
+    try { a.pause(); a.currentTime = 0; } catch(e){}
+  });
 }
 
 /* --- ゲームオーバー UI --- */
@@ -507,6 +639,7 @@ function hideGameOverUI() {
 
 /* --- リセット（再挑戦） --- */
 function resetGame() {
+  stopGameoverAudio();
   floor = 1;
   player.hp = 10;
   player.maxHp = 10;
@@ -519,11 +652,13 @@ function resetGame() {
   hideGameOverUI();
   generateMap();
   draw();
+  if (bgmAutoStarted) startBgm();
 }
 
 /* --- 入力 --- */
 window.addEventListener('keydown', (e)=>{
   if (gameOver) return;
+  startBgmIfNeeded();
   const key = e.key;
   if (key === 'ArrowUp' || key === 'w' || key === 'W') { tryMovePlayer(0,-1); e.preventDefault(); }
   else if (key === 'ArrowDown' || key === 's' || key === 'S') { tryMovePlayer(0,1); e.preventDefault(); }
@@ -531,11 +666,10 @@ window.addEventListener('keydown', (e)=>{
   else if (key === 'ArrowRight' || key === 'd' || key === 'D') { tryMovePlayer(1,0); e.preventDefault(); }
   else if (key === ' ') { enemiesTurn(); messages.push('待機した。'); revealAround(player.x, player.y); checkPlayerDead(); draw(); e.preventDefault(); }
 });
+canvasEl.addEventListener('mousedown', () => { startBgmIfNeeded(); });
 
 /* --- 再挑戦ボタン --- */
-retryBtn.addEventListener('click', () => {
-  resetGame();
-});
+retryBtn.addEventListener('click', () => { resetGame(); });
 
 /* --- 初期化 --- */
 function startIfReady(){
