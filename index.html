@@ -110,7 +110,49 @@
   }
   .btn-large:active { background:#111; transform:translateY(1px); }
 
+  /* Start button */
+  .startBtn {
+    width:80px;
+    height:32px;
+    border-radius:16px;
+    background:linear-gradient(180deg,#2b2b2b,#1b1b1b);
+    border:2px solid #2a2a2a;
+    color:var(--white);
+    font-weight:600;
+    font-size:12px;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    -webkit-tap-highlight-color: transparent;
+  }
+  .startBtn:active { background:#111; transform:translateY(1px); }
+
   .smallBtns { display:none; }
+
+  /* Pause overlay */
+  .pauseOverlay {
+    position:absolute;
+    left:0; top:0;
+    width:100%; height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:rgba(0,0,0,0.8);
+    z-index:42;
+    transition:opacity 300ms ease;
+  }
+  .pauseOverlay.hidden { opacity:0; pointer-events:none; }
+  .pauseText {
+    color:var(--accent);
+    font-size:48px;
+    font-weight:800;
+    letter-spacing:4px;
+    animation: pulse 2s infinite;
+  }
+  @keyframes pulse {
+    0%, 50% { opacity:1; }
+    51%, 100% { opacity:0.5; }
+  }
 
   /* Logo overlay */
   .logoOverlay {
@@ -259,6 +301,11 @@
         <button id="retryBtn">再挑戦</button>
       </div>
     </div>
+
+    <!-- Pause overlay -->
+    <div id="pauseOverlay" class="pauseOverlay hidden" role="dialog" aria-label="ゲーム一時停止">
+      <div class="pauseText">PAUSE</div>
+    </div>
   </div>
 
   <!-- HUD: status と message を別行で表示 -->
@@ -282,6 +329,8 @@
 
     <div class="buttons" aria-hidden="false">
       <div class="row">
+        <button id="startBtn" class="startBtn" data-action="pause" aria-label="START ボタン">START</button>
+        <div style="width:8px"></div>
         <button id="btnB" class="btn-large" data-action="wait" aria-label="B ボタン">B</button>
         <div style="width:8px"></div>
         <button id="btnA" class="btn-large" data-action="attack" aria-label="A ボタン">A</button>
@@ -356,6 +405,7 @@ let enemies = [];
 let killCount = 0;
 let messages = [];
 let gameOver = false;
+let isPaused = false;
 
 /* Enemy attack scaling */
 const enemyBaseAtk = 1;
@@ -595,7 +645,7 @@ function startBgmIfNeeded() {
 }
 
 function tryMovePlayer(dx,dy) {
-  if (gameOver) return;
+  if (gameOver || isPaused) return;
   startBgmIfNeeded();
   const nx = player.x + dx, ny = player.y + dy;
   if (!inBounds(nx,ny)) return;
@@ -741,9 +791,58 @@ function hideGameOverUI() {
   gameOverOverlay.classList.add('hidden');
 }
 
+/* Pause functionality */
+function togglePause() {
+  if (gameOver) return;
+  isPaused = !isPaused;
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  if (isPaused) {
+    pauseOverlay.classList.remove('hidden');
+    bgm.pause();
+  } else {
+    pauseOverlay.classList.add('hidden');
+    if (bgmAutoStarted) bgm.play().catch(()=>{});
+  }
+}
+
+/* Reset / start */
+function resetGame() {
+  try { gameoverAudio.pause(); gameoverAudio.currentTime = 0; } catch(e){}
+  hideGameOverUI();
+  floor = 1;
+  player.hp = 10;
+  player.maxHp = 10;
+  player.baseAtk = 1;
+  player.randomAtk = 1;
+  killCount = 0;
+  messages = [];
+  nextGrowthThreshold = nextThresholdValue();
+  gameOver = false;
+  bgmAutoStarted = false;
+  generateMap();
+  draw();
+  startBgmIfNeeded();
+}
+
+/* Retry button */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const retryBtn = document.getElementById('retryBtn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', resetGame);
+    retryBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); resetGame(); }, {passive:false});
+  }
+});
+
 /* Input: keyboard */
 window.addEventListener('keydown', (e)=>{
-  if (gameOver) return;
+  if (gameOver) {
+    if (e.key === 'Enter') resetGame();
+    return;
+  }
+  if (isPaused) {
+    if (e.key === 'Enter') togglePause();
+    return;
+  }
   startBgmIfNeeded();
   hideLogoIfVisible();
   const key = e.key;
@@ -752,6 +851,7 @@ window.addEventListener('keydown', (e)=>{
   else if (key === 'ArrowLeft' || key === 'a' || key === 'A') { tryMovePlayer(-1,0); e.preventDefault(); }
   else if (key === 'ArrowRight' || key === 'd' || key === 'D') { tryMovePlayer(1,0); e.preventDefault(); }
   else if (key === ' ') { enemiesTurn(); messages.push('待機した。'); revealAround(player.x, player.y); checkPlayerDead(); draw(); e.preventDefault(); }
+  else if (key === 'Enter') { togglePause(); e.preventDefault(); }
 });
 
 /* Touch / controller binding */
@@ -761,6 +861,11 @@ function bindController() {
     const action = btn.getAttribute('data-action');
     const startHandler = (ev) => {
       ev.preventDefault();
+      if (action === 'pause') {
+        togglePause();
+        return;
+      }
+      if (isPaused) return;
       startBgmIfNeeded();
       hideLogoIfVisible();
       if (action === 'up') tryMovePlayer(0,-1);
@@ -800,6 +905,20 @@ function showLogoInitially() {
   logoOverlay.classList.remove('hidden');
   logoOverlay.addEventListener('touchstart', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); }, {passive:false});
   logoOverlay.addEventListener('mousedown', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); });
+}
+
+/* Pause functionality */
+function togglePause() {
+  if (gameOver) return;
+  isPaused = !isPaused;
+  const pauseOverlay = document.getElementById('pauseOverlay');
+  if (isPaused) {
+    pauseOverlay.classList.remove('hidden');
+    bgm.pause();
+  } else {
+    pauseOverlay.classList.add('hidden');
+    if (bgmAutoStarted) bgm.play().catch(()=>{});
+  }
 }
 
 /* Reset / start */
