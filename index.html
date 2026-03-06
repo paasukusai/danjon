@@ -31,9 +31,11 @@
   .gameWrap { width:100%; max-width:640px; display:flex; flex-direction:column; align-items:center; gap:8px; position:relative; }
   canvas { image-rendering: pixelated; background:#000; border:4px solid #222; width:100%; height:auto; max-height:80vh; display:block; }
 
-  /* HUD */
-  #hud { width:100%; max-width:640px; display:flex; justify-content:space-between; gap:8px; }
-  .info { background:var(--panel); padding:8px 12px; border-radius:8px; min-width:140px; text-align:left; border:1px solid #222; color:var(--white); font-size:14px; }
+  /* HUD: status と message を別行に */
+  #hud { width:100%; max-width:640px; display:flex; flex-direction:column; gap:8px; }
+  .info { background:var(--panel); padding:8px 12px; border-radius:8px; text-align:left; border:1px solid #222; color:var(--white); font-size:14px; }
+  #status { display:flex; justify-content:space-between; align-items:center; }
+  #message { background:#111; color:#ddd; font-weight:600; }
 
   /* Controller (Game Boy like) */
   .controller {
@@ -160,9 +162,14 @@
     </div>
   </div>
 
+  <!-- HUD: status と message を別行で表示 -->
   <div id="hud">
-    <div class="info" id="status">HP: 10/10 | Floor: 1 | Lv: 1</div>
-    <div class="info" id="message">タッチで操作。Aで攻撃、Bで待機。</div>
+    <div id="status" class="info">
+      <div id="hpText">HP: 10/10</div>
+      <div id="floorText">Floor: 1</div>
+      <div id="lvText">Lv: 1</div>
+    </div>
+    <div id="message" class="info">タッチで操作。Aで攻撃、Bで待機。</div>
   </div>
 
   <!-- On-screen controller -->
@@ -199,7 +206,6 @@ const MAP_W = 20;
 const MAP_H = 20;
 const VIS_RADIUS = 4;
 const logoOverlay = document.getElementById('logoOverlay');
-const logoImg = document.getElementById('logoImg');
 
 const TILE = { WALL:0, FLOOR:1, STAIRS:2, POTION:3 };
 
@@ -409,7 +415,9 @@ function draw() {
     ctx.drawImage(fighterImg, 0, 0, fighterImg.width, fighterImg.height, player.x*TILE_SIZE, player.y*TILE_SIZE, TILE_SIZE, TILE_SIZE);
   } else drawCircle(player.x, player.y, '#66ccff');
 
-  document.getElementById('status').textContent = `HP: ${player.hp}/${player.maxHp} | Floor: ${floor} | Lv: ${player.baseAtk}`;
+  document.getElementById('hpText').textContent = `HP: ${player.hp}/${player.maxHp}`;
+  document.getElementById('floorText').textContent = `Floor: ${floor}`;
+  document.getElementById('lvText').textContent = `Lv: ${player.baseAtk}`;
   const msg = messages.length ? messages[messages.length-1] : 'タッチで操作。';
   document.getElementById('message').textContent = msg;
 }
@@ -678,15 +686,11 @@ let logoAutoHideTimer = null;
 function hideLogoIfVisible() {
   if (!logoOverlay || logoOverlay.classList.contains('hidden')) return;
   logoOverlay.classList.add('hidden');
-  // remove from DOM after transition
   setTimeout(()=>{ if (logoOverlay && logoOverlay.parentNode) logoOverlay.parentNode.removeChild(logoOverlay); }, 350);
 }
 function showLogoInitially() {
-  // If logo image not loaded, still show overlay; it will display when available
   logoOverlay.classList.remove('hidden');
-  // auto-hide after 3 seconds if user doesn't interact
   logoAutoHideTimer = setTimeout(()=>{ hideLogoIfVisible(); }, 3000);
-  // clicking/touching overlay hides it and starts BGM
   logoOverlay.addEventListener('touchstart', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); }, {passive:false});
   logoOverlay.addEventListener('mousedown', (e)=>{ e.preventDefault(); startBgmIfNeeded(); hideLogoIfVisible(); });
 }
