@@ -136,6 +136,77 @@
   }
   .logoBox img { width:100%; height:100%; object-fit:contain; border-radius:12px; box-shadow:0 8px 30px rgba(0,0,0,0.6); }
 
+  /* Game over overlay */
+  .gameOverOverlay {
+    position:absolute;
+    left:0; top:0;
+    width:100%; height:100%;
+    display:flex;
+    align-items:center;
+    justify-content:center;
+    background:linear-gradient(0deg, rgba(0,0,0,0.8), rgba(0,0,0,0.6));
+    z-index:41;
+    transition:opacity 300ms ease;
+  }
+  .gameOverOverlay.hidden { opacity:0; pointer-events:none; }
+  .gameOverBox {
+    width:80%;
+    max-width:420px;
+    background:var(--panel);
+    border:3px solid #cc3333;
+    border-radius:12px;
+    padding:24px;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:16px;
+    text-align:center;
+  }
+  .gameOverBox h2 {
+    margin:0;
+    font-size:24px;
+    color:#ff6666;
+  }
+  .gameOverStats {
+    display:flex;
+    flex-direction:column;
+    gap:8px;
+    width:100%;
+  }
+  .gameOverStats div {
+    font-size:16px;
+    color:var(--white);
+  }
+  .gameOverStats .floor {
+    color:var(--accent);
+    font-weight:700;
+  }
+  .gameOverStats .rating {
+    color:#ffdd66;
+    font-weight:700;
+    font-size:18px;
+  }
+  #retryBtn {
+    padding:12px 32px;
+    font-size:16px;
+    font-weight:700;
+    color:var(--white);
+    background:#cc3333;
+    border:2px solid #ff6666;
+    border-radius:8px;
+    cursor:pointer;
+    transition:all 200ms ease;
+    -webkit-tap-highlight-color: transparent;
+  }
+  #retryBtn:hover {
+    background:#ff6666;
+    transform:translateY(-2px);
+  }
+  #retryBtn:active {
+    background:#cc3333;
+    transform:translateY(0);
+  }
+
   /* Mobile friendly spacing */
   @media (max-width:420px){
     .dpad { width:150px; height:110px; }
@@ -158,6 +229,18 @@
     <div id="logoOverlay" class="logoOverlay" role="dialog" aria-label="ゲームロゴ">
       <div class="logoBox" id="logoBox">
         <img id="logoImg" src="logo.png" alt="ゲームロゴ">
+      </div>
+    </div>
+
+    <!-- Game over overlay -->
+    <div id="gameOverOverlay" class="gameOverOverlay hidden" role="dialog" aria-label="ゲームオーバー">
+      <div class="gameOverBox">
+        <h2>ゲームオーバー</h2>
+        <div class="gameOverStats">
+          <div class="floor">到達フロア: <span id="finalFloor">1</span></div>
+          <div class="rating">評価: <span id="finalRating">初心者</span></div>
+        </div>
+        <button id="retryBtn">再挑戦</button>
       </div>
     </div>
   </div>
@@ -418,8 +501,10 @@ function draw() {
   document.getElementById('hpText').textContent = `HP: ${player.hp}/${player.maxHp}`;
   document.getElementById('floorText').textContent = `Floor: ${floor}`;
   document.getElementById('lvText').textContent = `Lv: ${player.baseAtk}`;
-  const msg = messages.length ? messages[messages.length-1] : 'タッチで操作。';
-  document.getElementById('message').textContent = msg;
+  if (!gameOver) {
+    const msg = messages.length ? messages[messages.length-1] : 'タッチで操作。';
+    document.getElementById('message').textContent = msg;
+  }
 }
 
 function drawWithAlpha(drawFn, alpha) { ctx.save(); ctx.globalAlpha = alpha; drawFn(); ctx.restore(); }
@@ -620,7 +705,7 @@ function checkPlayerDead() {
   }
 }
 
-/* Game over UI (simple HUD message) */
+/* Game over UI */
 function evaluatePlayer(reachedFloor) {
   if (reachedFloor >= 100) return '伝説の勇者';
   if (reachedFloor >= 80) return '伝説に近い勇者';
@@ -630,7 +715,14 @@ function evaluatePlayer(reachedFloor) {
   return '初心者';
 }
 function showGameOverUI() {
-  document.getElementById('message').textContent = `ゲームオーバー — 到達フロア: ${floor} | 評価: ${evaluatePlayer(floor)}`;
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  document.getElementById('finalFloor').textContent = floor;
+  document.getElementById('finalRating').textContent = evaluatePlayer(floor);
+  gameOverOverlay.classList.remove('hidden');
+}
+function hideGameOverUI() {
+  const gameOverOverlay = document.getElementById('gameOverOverlay');
+  gameOverOverlay.classList.add('hidden');
 }
 
 /* Input: keyboard */
@@ -698,6 +790,7 @@ function showLogoInitially() {
 /* Reset / start */
 function resetGame() {
   try { gameoverAudio.pause(); gameoverAudio.currentTime = 0; } catch(e){}
+  hideGameOverUI();
   floor = 1;
   player.hp = 10;
   player.maxHp = 10;
@@ -707,10 +800,20 @@ function resetGame() {
   messages = [];
   nextGrowthThreshold = nextThresholdValue();
   gameOver = false;
+  bgmAutoStarted = false;
   generateMap();
   draw();
-  if (bgmAutoStarted) bgm.play().catch(()=>{});
+  startBgmIfNeeded();
 }
+
+/* Retry button */
+document.addEventListener('DOMContentLoaded', ()=>{
+  const retryBtn = document.getElementById('retryBtn');
+  if (retryBtn) {
+    retryBtn.addEventListener('click', resetGame);
+    retryBtn.addEventListener('touchend', (e)=>{ e.preventDefault(); resetGame(); }, {passive:false});
+  }
+});
 
 /* Initialization */
 function startIfReady(){
