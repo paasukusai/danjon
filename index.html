@@ -79,10 +79,10 @@
   }
   .dpad button:active { background:var(--btn-press); transform:translateY(1px); }
 
-  .dpad .up    { left:62px; top:0; }
-  .dpad .down  { left:62px; bottom:0; top:auto; }
+  .dpad .up    { left:82px; top:0; }
+  .dpad .down  { left:82px; bottom:0; top:auto; }
   .dpad .left  { left:0; top:42px; }
-  .dpad .right { left:124px; top:42px; }
+  .dpad .right { left:164px; top:42px; }
 
   /* Buttons A/B */
   .buttons {
@@ -266,11 +266,11 @@
 
   /* Mobile friendly spacing */
   @media (max-width:420px){
-    .dpad { width:150px; height:110px; }
+    .dpad { width:180px; height:140px; }
     .dpad button { width:44px; height:44px; border-radius:8px; font-size:16px; }
-    .dpad .up { left:53px; }
-    .dpad .down { left:53px; }
-    .dpad .right { left:106px; }
+    .dpad .up { left:68px; }
+    .dpad .down { left:68px; }
+    .dpad .right { left:136px; }
     .btn-large { width:56px; height:56px; font-size:16px; }
     .controller { padding:10px; gap:8px; }
     .logoBox { max-width:360px; width:86%; }
@@ -337,6 +337,7 @@
       <div class="row" style="justify-content:center;">
         <button id="startBtn" class="startBtn" data-action="pause" aria-label="START ボタン">START</button>
       </div>
+      <div class="row" style="height:20px;"></div>
     </div>
   </div>
 </div>
